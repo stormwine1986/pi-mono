@@ -1,0 +1,20 @@
+services:
+  agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: pi-mono-agent:latest
+    container_name: agent
+    environment:
+      - REDIS_HOST=host.docker.internal
+      - REDIS_PORT=6379
+      - REDIS_INPUT_QUEUE=agent_tasks
+      - REDIS_OUTPUT_QUEUE=agent_results
+      - REDIS_CONTROL_CHANNEL=agent_control
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    volumes:
+      - /home/ubuntu/.pi:/home/pi-mono/.pi
+      - /var/run/docker.sock:/var/run/docker.sock
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped

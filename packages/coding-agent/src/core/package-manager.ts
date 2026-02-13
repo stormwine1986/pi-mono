@@ -1538,7 +1538,7 @@ export class DefaultPackageManager implements PackageManager {
 
 		const userDirs = {
 			extensions: join(globalBaseDir, "extensions"),
-			skills: join(globalBaseDir, "skills"),
+			skills: join(globalBaseDir, "workspace", "skills"),
 			prompts: join(globalBaseDir, "prompts"),
 			themes: join(globalBaseDir, "themes"),
 		};

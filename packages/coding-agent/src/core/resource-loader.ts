@@ -54,22 +54,23 @@ function resolvePromptInput(input: string | undefined, description: string): str
 	return input;
 }
 
-function loadContextFileFromDir(dir: string): { path: string; content: string } | null {
-	const candidates = ["AGENTS.md", "CLAUDE.md"];
+function loadContextFilesFromDir(dir: string): Array<{ path: string; content: string }> {
+	const candidates = ["AGENTS.md", "CLAUDE.md", "IDENTITY.md", "SOUL.md", "USER.md", "MEMORY.md"];
+	const files: Array<{ path: string; content: string }> = [];
 	for (const filename of candidates) {
 		const filePath = join(dir, filename);
 		if (existsSync(filePath)) {
 			try {
-				return {
+				files.push({
 					path: filePath,
 					content: readFileSync(filePath, "utf-8"),
-				};
+				});
 			} catch (error) {
 				console.error(chalk.yellow(`Warning: Could not read ${filePath}: ${error}`));
 			}
 		}
 	}
-	return null;
+	return files;
 }
 
 function loadProjectContextFiles(
@@ -81,10 +82,10 @@ function loadProjectContextFiles(
 	const contextFiles: Array<{ path: string; content: string }> = [];
 	const seenPaths = new Set<string>();
 
-	const globalContext = loadContextFileFromDir(resolvedAgentDir);
-	if (globalContext) {
-		contextFiles.push(globalContext);
-		seenPaths.add(globalContext.path);
+	const globalContextFiles = loadContextFilesFromDir(resolvedAgentDir);
+	for (const file of globalContextFiles) {
+		contextFiles.push(file);
+		seenPaths.add(file.path);
 	}
 
 	const ancestorContextFiles: Array<{ path: string; content: string }> = [];
@@ -93,10 +94,15 @@ function loadProjectContextFiles(
 	const root = resolve("/");
 
 	while (true) {
-		const contextFile = loadContextFileFromDir(currentDir);
-		if (contextFile && !seenPaths.has(contextFile.path)) {
-			ancestorContextFiles.unshift(contextFile);
-			seenPaths.add(contextFile.path);
+		const dirFiles = loadContextFilesFromDir(currentDir);
+		// Add files from this directory that we haven't seen yet
+		// We add them in reverse order so they stay in candidate priority order when unshifted
+		for (let i = dirFiles.length - 1; i >= 0; i--) {
+			const file = dirFiles[i];
+			if (!seenPaths.has(file.path)) {
+				ancestorContextFiles.unshift(file);
+				seenPaths.add(file.path);
+			}
 		}
 
 		if (currentDir === root) break;
