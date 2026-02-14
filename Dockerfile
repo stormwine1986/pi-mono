@@ -17,19 +17,21 @@ COPY packages/ai/package.json ./packages/ai/
 COPY packages/agent/package.json ./packages/agent/
 COPY packages/coding-agent/package.json ./packages/coding-agent/
 COPY packages/worker/package.json ./packages/worker/
-COPY packages/mom/package.json ./packages/mom/
-COPY packages/pods/package.json ./packages/pods/
 COPY packages/tui/package.json ./packages/tui/
-COPY packages/web-ui/package.json ./packages/web-ui/
 
-# Install dependencies (using clean-install for reliable builds)
+# Install dependencies
 RUN npm ci
 
-# Copy all source
+# Copy all source (filtered by .dockerignore)
 COPY . .
 
-# Build all packages
-RUN npm run build
+# Build necessary packages in order
+RUN npm run build -w @mariozechner/pi-tui && \
+    npm run build -w @mariozechner/pi-ai && \
+    npm run build -w @mariozechner/pi-agent-core && \
+    npm run build -w @mariozechner/pi-coding-agent && \
+    npm run build -w @mariozechner/pi-worker && \
+    ln -s /app/packages/coding-agent/dist/cli.js /app/node_modules/.bin/pi
 
 # Runtime stage
 FROM node:20-slim
@@ -76,6 +78,7 @@ ENV REDIS_CONTROL_CHANNEL=agent_control
 ENV GEMINI_API_KEY=""
 ENV PI-STATE-DIR=/home/pi-mono/.pi
 ENV PI-WORKSPACE-DIR=/home/pi-mono/.pi/agent/workspace
+ENV PATH="/app/node_modules/.bin:${PATH}"
 
 # Create the expected workspace directory for the worker using pi-mono user
 RUN mkdir -p /home/pi-mono/.pi/agent/workspace && \

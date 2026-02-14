@@ -1,0 +1,16 @@
+node_modules
+.git
+.github
+.vscode
+.agent
+.gemini
+dist
+*.log
+
+# Exclude unnecessary packages for worker
+packages/web-ui
+packages/pods
+packages/mom
+packages/*/example
+packages/*/docs
+packages/*/test

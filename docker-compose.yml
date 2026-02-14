@@ -1,12 +1,23 @@
 services:
+  redis:
+    image: redis:7-alpine
+    container_name: pi-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
   agent:
     build:
       context: .
       dockerfile: Dockerfile
     image: pi-mono-agent:latest
     container_name: agent
+    depends_on:
+      - redis
     environment:
-      - REDIS_HOST=host.docker.internal
+      - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_INPUT_QUEUE=agent_tasks
       - REDIS_OUTPUT_QUEUE=agent_results
@@ -15,6 +26,7 @@ services:
     volumes:
       - /home/ubuntu/.pi:/home/pi-mono/.pi
       - /var/run/docker.sock:/var/run/docker.sock
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     restart: unless-stopped
+
+volumes:
+  redis_data:
