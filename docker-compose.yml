@@ -1,9 +1,8 @@
 services:
   redis:
     image: redis:7-alpine
-    container_name: pi-redis
-    ports:
-      - "6379:6379"
+    container_name: redis
+    network_mode: host
     volumes:
       - redis_data:/data
     restart: unless-stopped
@@ -12,16 +11,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      network: host
     image: pi-mono-agent:latest
     container_name: agent
+    network_mode: host
     depends_on:
       - redis
     environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_INPUT_QUEUE=agent_tasks
-      - REDIS_OUTPUT_QUEUE=agent_results
-      - REDIS_CONTROL_CHANNEL=agent_control
+      - REDIS_URL=redis://localhost:6379
       - GEMINI_API_KEY=${GEMINI_API_KEY}
     volumes:
       - /home/ubuntu/.pi:/home/pi-mono/.pi

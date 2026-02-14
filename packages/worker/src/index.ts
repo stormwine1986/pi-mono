@@ -2,41 +2,10 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { createAgentSession } from "@mariozechner/pi-coding-agent";
 import { Redis } from "ioredis";
-
-export interface WorkerTask {
-	id?: string;
-	source?: string;
-	prompt?: string;
-	reset?: boolean;
-	[key: string]: any;
-}
-
-export interface WorkerResult {
-	id?: string;
-	response?: string;
-	error?: string;
-	status: "success" | "error";
-}
-
-export interface WorkerProgress {
-	id?: string;
-	status: "progress";
-	event: "llm_start" | "llm_end" | "tool_start" | "tool_end";
-	data?: any;
-}
-
-export interface WorkerControlSignal {
-	command: "stop" | "steer";
-	message?: string;
-}
+import { controlChannel, inputQueue, outputQueue, redisUrl } from "./config.js";
+import type { WorkerControlSignal, WorkerResponse, WorkerTask } from "./types.js";
 
 async function main() {
-	const redisHost = process.env.REDIS_HOST || "localhost";
-	const redisPort = Number.parseInt(process.env.REDIS_PORT || "6379", 10);
-	const inputQueue = process.env.REDIS_INPUT_QUEUE || "agent_tasks";
-	const outputQueue = process.env.REDIS_OUTPUT_QUEUE || "agent_results";
-	const controlChannel = process.env.REDIS_CONTROL_CHANNEL || "agent_control";
-
 	// Configuration directories from environment or defaults
 	const stateDir = process.env["PI-STATE-DIR"] || join(homedir(), ".pi");
 	const agentDir = join(stateDir, "agent");
@@ -52,21 +21,10 @@ async function main() {
 	});
 	const agent = session.agent;
 
-	console.log(`Connecting to Redis at ${redisHost}:${redisPort}...`);
-	const redis = new Redis({
-		host: redisHost,
-		port: redisPort,
-	});
-
-	const redisPublisher = new Redis({
-		host: redisHost,
-		port: redisPort,
-	});
-
-	const redisSubscriber = new Redis({
-		host: redisHost,
-		port: redisPort,
-	});
+	console.log(`Connecting to Redis at ${redisUrl}...`);
+	const redis = new Redis(redisUrl);
+	const redisPublisher = new Redis(redisUrl);
+	const redisSubscriber = new Redis(redisUrl);
 
 	// Keep track of current task ID for filtering control signals
 	let currentTaskId: string | undefined;
@@ -82,12 +40,19 @@ async function main() {
 			} else if (signal.command === "steer" && signal.message) {
 				console.log(`[Steer] Received steer for current task (${currentTaskId || "none"}): ${signal.message}`);
 				await session.steer(signal.message);
+			} else if (signal.command === "reset") {
+				console.log(`[Reset] Received reset command for current session`);
+				await session.newSession();
+				const taskId = signal.id;
+				const payload = {
+					id: taskId,
+					source: "internal",
+					prompt: "发出你的问候。",
+				};
+				await redisPublisher.rpush(inputQueue, JSON.stringify(payload));
 			}
 		} catch (_e) {
-			if (rawSignal === "STOP") {
-				console.log(`[Interrupt] Received plain STOP`);
-				agent.abort();
-			}
+			console.error(`[Control] Failed to parse control signal as JSON: ${rawSignal}`);
 		}
 	});
 
@@ -113,25 +78,16 @@ async function main() {
 				continue;
 			}
 
-			const { id, prompt, reset } = payload;
+			const { id, prompt } = payload;
 			currentTaskId = id;
 
-			if (reset) {
-				console.log(`Resetting agent context for task ${id || "unknown"}`);
-				await session.newSession();
-			}
-
 			if (!prompt) {
-				if (reset) {
-					currentTaskId = undefined;
-					continue;
-				}
 				console.error("Message missing prompt:", payload);
 				currentTaskId = undefined;
 				continue;
 			}
 
-			console.log(`Processing task ${id || "unknown"}: ${prompt}`);
+			console.log(`Processing task ${id || ""}: ${prompt}`);
 
 			// Subscribe to session events to collect the response and emit progress
 			let responseText = "";
@@ -146,7 +102,7 @@ async function main() {
 				}
 
 				// Emit progress events
-				let progress: WorkerProgress | null = null;
+				let progress: WorkerResponse | null = null;
 				switch (event.type) {
 					case "message_start":
 						if (event.message.role === "assistant") {
@@ -185,9 +141,9 @@ async function main() {
 
 			try {
 				await session.prompt(prompt);
-				console.log(`Task ${id || "unknown"} completed.`);
+				console.log(`Task ${id || ""} completed.`);
 
-				const resultPayload: WorkerResult = {
+				const resultPayload: WorkerResponse = {
 					id,
 					response: responseText,
 					status: "success",
@@ -196,11 +152,11 @@ async function main() {
 				await redisPublisher.rpush(outputQueue, JSON.stringify(resultPayload));
 			} catch (err: any) {
 				if (err.message === "Aborted") {
-					console.log(`Task ${id || "unknown"} was aborted by user.`);
+					console.log(`Task ${id || ""} was aborted by user.`);
 				} else {
-					console.error(`Error processing task ${id || "unknown"}:`, err);
+					console.error(`Error processing task ${id || ""}:`, err);
 				}
-				const errorPayload: WorkerResult = {
+				const errorPayload: WorkerResponse = {
 					id,
 					error: err.message === "Aborted" ? "Task aborted by user" : err.message,
 					status: "error",

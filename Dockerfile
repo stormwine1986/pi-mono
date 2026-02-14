@@ -62,7 +62,9 @@ RUN if ! getent group pi-mono >/dev/null; then \
         else \
             useradd -u 1000 -g pi-mono -m -s /bin/bash pi-mono; \
         fi; \
-    fi
+    fi && \
+    groupadd -g 999 docker_host && \
+    usermod -aG docker_host pi-mono
 
 WORKDIR /app
 
@@ -70,11 +72,7 @@ WORKDIR /app
 COPY --from=builder --chown=pi-mono:pi-mono /app /app
 
 # Default environment variables
-ENV REDIS_HOST=host.docker.internal
-ENV REDIS_PORT=6379
-ENV REDIS_INPUT_QUEUE=agent_tasks
-ENV REDIS_OUTPUT_QUEUE=agent_results
-ENV REDIS_CONTROL_CHANNEL=agent_control
+ENV REDIS_URL=redis://localhost:6379
 ENV GEMINI_API_KEY=""
 ENV PI-STATE-DIR=/home/pi-mono/.pi
 ENV PI-WORKSPACE-DIR=/home/pi-mono/.pi/agent/workspace
