@@ -67,12 +67,16 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions = {}): strin
 			prompt += appendSection;
 		}
 
+		prompt += `\nCurrent working directory: ${resolvedCwd}`;
+
 		// Append project context files
 		if (contextFiles.length > 0) {
-			prompt += "\n\n# Project Context\n\n";
-			prompt += "Project-specific instructions and guidelines:\n\n";
-			for (const { path: filePath, content } of contextFiles) {
-				prompt += `## ${filePath}\n\n${content}\n\n`;
+			prompt += "\n\n# Workspace Context\n\n";
+			prompt += "The following workspace context files have been loaded:\n\n";
+			prompt +=
+				"If SOUL.md is present, embody its persona and tone. Avoid stiff, generic replies; follow its guidance unless higher-priority instructions override it.\n\n";
+			for (const { content } of contextFiles) {
+				prompt += `## ${content}\n\n`;
 			}
 		}
 
@@ -81,10 +85,6 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions = {}): strin
 		if (customPromptHasRead && skills.length > 0) {
 			prompt += formatSkillsForPrompt(skills);
 		}
-
-		// Add date/time and working directory last
-		prompt += `\nCurrent date and time: ${dateTime}`;
-		prompt += `\nCurrent working directory: ${resolvedCwd}`;
 
 		return prompt;
 	}
@@ -169,7 +169,6 @@ Pi documentation (read only when the user asks about pi itself, its SDK, extensi
 	// Append project context files
 	if (contextFiles.length > 0) {
 		prompt += "\n\n# Project Context\n\n";
-		prompt += "Project-specific instructions and guidelines:\n\n";
 		for (const { path: filePath, content } of contextFiles) {
 			prompt += `## ${filePath}\n\n${content}\n\n`;
 		}
