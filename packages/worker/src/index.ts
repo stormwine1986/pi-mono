@@ -2,9 +2,9 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { createAgentSession } from "@mariozechner/pi-coding-agent";
 import { Redis } from "ioredis";
+import type { WorkerControlSignal, WorkerResponse, WorkerTask } from "pi-protocol";
 import { consumerGroup, consumerName, controlChannel, inputQueue, outputQueue, redisUrl } from "./config.js";
 import { error, log } from "./logger.js";
-import type { WorkerControlSignal, WorkerResponse, WorkerTask } from "./types.js";
 
 async function main() {
 	// Configuration directories from environment or defaults

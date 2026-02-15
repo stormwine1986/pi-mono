@@ -18,15 +18,20 @@ COPY packages/agent/package.json ./packages/agent/
 COPY packages/coding-agent/package.json ./packages/coding-agent/
 COPY packages/worker/package.json ./packages/worker/
 COPY packages/tui/package.json ./packages/tui/
+COPY --from=protocol package.json packages/protocol/
 
 # Install dependencies
-RUN npm ci
+RUN npm ci && rm -rf packages/protocol
 
 # Copy all source (filtered by .dockerignore)
 COPY . .
+# Remove the symlink and copy actual content
+RUN rm packages/protocol
+COPY --from=protocol . packages/protocol/
 
 # Build necessary packages in order
-RUN npm run build -w @mariozechner/pi-tui && \
+RUN npm run build -w pi-protocol && \
+    npm run build -w @mariozechner/pi-tui && \
     npm run build -w @mariozechner/pi-ai && \
     npm run build -w @mariozechner/pi-agent-core && \
     npm run build -w @mariozechner/pi-coding-agent && \

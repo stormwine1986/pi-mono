@@ -11,6 +11,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      additional_contexts:
+        - protocol=../pi-mono-stack/protocol
       network: host
     image: pi-mono-agent:latest
     container_name: agent

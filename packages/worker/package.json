@@ -15,6 +15,7 @@
         "@mariozechner/pi-agent-core": "^0.52.10",
         "@mariozechner/pi-ai": "^0.52.10",
         "@mariozechner/pi-coding-agent": "^0.52.10",
+        "pi-protocol": "^1.0.0",
         "ioredis": "^5.4.1"
     },
     "devDependencies": {
