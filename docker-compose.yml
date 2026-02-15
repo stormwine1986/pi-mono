@@ -1,12 +1,4 @@
 services:
-  redis:
-    image: redis:7-alpine
-    container_name: redis
-    network_mode: host
-    volumes:
-      - redis_data:/data
-    restart: unless-stopped
-
   agent:
     build:
       context: .
@@ -21,11 +13,8 @@ services:
       - redis
     environment:
       - REDIS_URL=redis://localhost:6379
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_API_KEY
     volumes:
       - /home/ubuntu/.pi:/home/pi-mono/.pi
       - /var/run/docker.sock:/var/run/docker.sock
     restart: unless-stopped
-
-volumes:
-  redis_data:
