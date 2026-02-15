@@ -2,20 +2,9 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { createAgentSession } from "@mariozechner/pi-coding-agent";
 import { Redis } from "ioredis";
-import { controlChannel, inputQueue, outputQueue, redisUrl } from "./config.js";
+import { consumerGroup, consumerName, controlChannel, inputQueue, outputQueue, redisUrl } from "./config.js";
+import { error, log } from "./logger.js";
 import type { WorkerControlSignal, WorkerResponse, WorkerTask } from "./types.js";
-
-function log(message: string, ...args: any[]) {
-	const now = new Date();
-	const timestamp = `${now.toISOString().replace("T", " ").replace("Z", "")}`;
-	console.log(`[${timestamp}] ${message}`, ...args);
-}
-
-function error(message: string, ...args: any[]) {
-	const now = new Date();
-	const timestamp = `${now.toISOString().replace("T", " ").replace("Z", "")}`;
-	console.error(`[${timestamp}] ${message}`, ...args);
-}
 
 async function main() {
 	// Configuration directories from environment or defaults
@@ -38,6 +27,16 @@ async function main() {
 	const redisPublisher = new Redis(redisUrl);
 	const redisSubscriber = new Redis(redisUrl);
 
+	// Ensure consumer group exists
+	try {
+		await redis.xgroup("CREATE", inputQueue, consumerGroup, "$", "MKSTREAM");
+		log(`Created consumer group ${consumerGroup} for stream ${inputQueue}`);
+	} catch (err: any) {
+		if (!err.message.includes("BUSYGROUP")) {
+			error(`Failed to create consumer group: ${err.message}`);
+		}
+	}
+
 	// Keep track of current task ID for filtering control signals
 	let currentTaskId: string | undefined;
 
@@ -59,9 +58,9 @@ async function main() {
 				const payload = {
 					id: taskId,
 					source: "internal",
-					prompt: "发出你的问候。",
+					prompt: "向用户发出你的问候",
 				};
-				await redisPublisher.rpush(inputQueue, JSON.stringify(payload));
+				await redisPublisher.xadd(inputQueue, "*", "payload", JSON.stringify(payload));
 			}
 		} catch (_e) {
 			error(`[Control] Failed to parse control signal as JSON: ${rawSignal}`);
@@ -73,12 +72,42 @@ async function main() {
 
 	while (true) {
 		try {
-			// BLPOP returns [queueName, message]
-			const result = await redis.blpop(inputQueue, 0);
-			if (!result) continue;
+			// XREADGROUP returns [ [streamName, [ [id, [field, value, ...]], ... ]], ... ]
+			const result = await redis.xreadgroup(
+				"GROUP",
+				consumerGroup,
+				consumerName,
+				"COUNT",
+				1,
+				"BLOCK",
+				0,
+				"STREAMS",
+				inputQueue,
+				">",
+			);
 
-			const [_, rawMessage] = result;
-			log(`Received message: ${rawMessage}`);
+			if (!result || (result as any).length === 0) continue;
+
+			const [_, messages] = (result as any)[0];
+			if (!messages || messages.length === 0) continue;
+
+			const [messageId, fields] = messages[0];
+			// The payload is in the 'payload' field
+			let rawMessage = "";
+			for (let i = 0; i < fields.length; i += 2) {
+				if (fields[i] === "payload") {
+					rawMessage = fields[i + 1];
+					break;
+				}
+			}
+
+			if (!rawMessage) {
+				log(`Received message ${messageId} with no payload fields`);
+				await redis.xack(inputQueue, consumerGroup, messageId);
+				continue;
+			}
+
+			log(`Received message ${messageId}: ${rawMessage}`);
 
 			let payload: WorkerTask;
 			try {
@@ -143,7 +172,7 @@ async function main() {
 				}
 
 				if (progress) {
-					redisPublisher.rpush(outputQueue, JSON.stringify(progress)).catch((err) => {
+					redisPublisher.xadd(outputQueue, "*", "payload", JSON.stringify(progress)).catch((err) => {
 						error("Failed to publish progress event:", err);
 					});
 				}
@@ -151,7 +180,7 @@ async function main() {
 
 			try {
 				await session.prompt(prompt);
-				log(`Task ${id || ""} completed.`);
+				log(`Task ${id} completed.`);
 
 				const resultPayload: WorkerResponse = {
 					id,
@@ -159,22 +188,24 @@ async function main() {
 					status: "success",
 				};
 
-				await redisPublisher.rpush(outputQueue, JSON.stringify(resultPayload));
+				await redisPublisher.xadd(outputQueue, "*", "payload", JSON.stringify(resultPayload));
 			} catch (err: any) {
 				if (err.message === "Aborted") {
-					log(`Task ${id || ""} was aborted by user.`);
+					log(`Task ${id} was aborted by user.`);
 				} else {
-					error(`Error processing task ${id || ""}:`, err);
+					error(`Error processing task ${id}:`, err);
 				}
 				const errorPayload: WorkerResponse = {
 					id,
 					error: err.message === "Aborted" ? "Task aborted by user" : err.message,
 					status: "error",
 				};
-				await redisPublisher.rpush(outputQueue, JSON.stringify(errorPayload));
+				await redisPublisher.xadd(outputQueue, "*", "payload", JSON.stringify(errorPayload));
 			} finally {
 				unsubscribe();
 				currentTaskId = undefined;
+				// ACK the message after processing
+				await redis.xack(inputQueue, consumerGroup, messageId);
 			}
 		} catch (err) {
 			error("Worker loop error:", err);
