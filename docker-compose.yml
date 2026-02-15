@@ -12,7 +12,7 @@ services:
       context: .
       dockerfile: Dockerfile
       additional_contexts:
-        - protocol=../pi-mono-stack/protocol
+        - protocol=../protocol
       network: host
     image: pi-mono-agent:latest
     container_name: agent
