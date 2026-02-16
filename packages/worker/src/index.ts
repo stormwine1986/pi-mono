@@ -54,6 +54,7 @@ async function main() {
 			} else if (signal.command === "reset") {
 				log(`[Reset] Received reset command for current session`);
 				await session.newSession();
+
 				const taskId = signal.id;
 				const payload = {
 					id: taskId,

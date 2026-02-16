@@ -25,8 +25,8 @@ RUN npm ci && rm -rf packages/protocol
 
 # Copy all source (filtered by .dockerignore)
 COPY . .
-# Remove the symlink and copy actual content
-RUN rm packages/protocol
+# Remove the symlink/directory and copy actual content
+RUN rm -rf packages/protocol
 COPY --from=protocol . packages/protocol/
 
 # Build necessary packages in order
