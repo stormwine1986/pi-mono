@@ -81,7 +81,7 @@ ENV REDIS_URL=redis://localhost:6379
 ENV GEMINI_API_KEY=""
 ENV PI-STATE-DIR=/home/pi-mono/.pi
 ENV PI-WORKSPACE-DIR=/home/pi-mono/.pi/agent/workspace
-ENV PATH="/app/node_modules/.bin:${PATH}"
+ENV PATH="/home/pi-mono/.pi/agent/bin:/app/node_modules/.bin:${PATH}"
 
 # Create the expected workspace directory for the worker using pi-mono user
 RUN mkdir -p /home/pi-mono/.pi/agent/workspace && \
