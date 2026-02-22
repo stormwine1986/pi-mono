@@ -2,7 +2,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { createAgentSession } from "@mariozechner/pi-coding-agent";
 import { Redis } from "ioredis";
-import type { WorkerControlSignal, WorkerResponse, WorkerTask } from "pi-protocol";
+import type { WorkerControlSignal, WorkerResponse, WorkerTask } from "./types.js";
 import { consumerGroup, consumerName, controlChannel, inputQueue, outputQueue, redisUrl } from "./config.js";
 import { error, log } from "./logger.js";
 
