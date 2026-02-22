@@ -12,9 +12,9 @@
         "start": "node dist/index.js"
     },
     "dependencies": {
-        "@mariozechner/pi-agent-core": "^0.52.10",
-        "@mariozechner/pi-ai": "^0.52.10",
-        "@mariozechner/pi-coding-agent": "^0.52.10",
+        "@mariozechner/pi-agent-core": "*",
+        "@mariozechner/pi-ai": "*",
+        "@mariozechner/pi-coding-agent": "*",
         "ioredis": "^5.4.1"
     },
     "devDependencies": {

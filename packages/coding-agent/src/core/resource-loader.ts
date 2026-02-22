@@ -55,9 +55,21 @@ function resolvePromptInput(input: string | undefined, description: string): str
 }
 
 function loadContextFilesFromDir(dir: string): Array<{ path: string; content: string }> {
-	const candidates = ["AGENTS.md", "CLAUDE.md", "IDENTITY.md", "SOUL.md", "USER.md", "MEMORY.md"];
+	const candidates = [
+		"AGENTS.md",
+		"CLAUDE.md",
+		"IDENTITY.md",
+		"SOUL.md",
+		"USER.md",
+		"MEMORY.md", // As mentioned by user
+	];
 	const files: Array<{ path: string; content: string }> = [];
+	const seenFilenames = new Set<string>(); // Prevent case-clash duplicates on case-insensitive filesystems
+
 	for (const filename of candidates) {
+		const lowerName = filename.toLowerCase();
+		if (seenFilenames.has(lowerName)) continue;
+
 		const filePath = join(dir, filename);
 		if (existsSync(filePath)) {
 			try {
@@ -65,6 +77,7 @@ function loadContextFilesFromDir(dir: string): Array<{ path: string; content: st
 					path: filePath,
 					content: readFileSync(filePath, "utf-8"),
 				});
+				seenFilenames.add(lowerName);
 			} catch (error) {
 				console.error(chalk.yellow(`Warning: Could not read ${filePath}: ${error}`));
 			}
