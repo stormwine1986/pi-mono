@@ -25,6 +25,7 @@ import "./app.css";
 import { icon } from "@mariozechner/mini-lit";
 import { Button } from "@mariozechner/mini-lit/dist/Button.js";
 import { Input } from "@mariozechner/mini-lit/dist/Input.js";
+import type { AgentInterface, ArtifactsPanel, SandboxRuntimeProvider } from "@mariozechner/pi-web-ui";
 import { createSystemNotification, customConvertToLlm, registerCustomMessageRenderers } from "./custom-messages.js";
 
 // Register custom message renderers
@@ -70,7 +71,7 @@ let chatPanel: ChatPanel;
 let agentUnsubscribe: (() => void) | undefined;
 
 const generateTitle = (messages: AgentMessage[]): string => {
-	const firstUserMsg = messages.find((m) => m.role === "user" || m.role === "user-with-attachments");
+	const firstUserMsg = messages.find((m: any) => m.role === "user" || m.role === "user-with-attachments");
 	if (!firstUserMsg || (firstUserMsg.role !== "user" && firstUserMsg.role !== "user-with-attachments")) return "";
 
 	let text = "";
@@ -206,7 +207,12 @@ Feel free to use these tools when needed to provide accurate and helpful respons
 		onApiKeyRequired: async (provider: string) => {
 			return await ApiKeyPromptDialog.prompt(provider);
 		},
-		toolsFactory: (_agent, _agentInterface, _artifactsPanel, runtimeProvidersFactory) => {
+		toolsFactory: (
+			_agent: Agent,
+			_agentInterface: AgentInterface,
+			_artifactsPanel: ArtifactsPanel,
+			runtimeProvidersFactory: () => SandboxRuntimeProvider[],
+		) => {
 			// Create javascript_repl tool with access to attachments + artifacts
 			const replTool = createJavaScriptReplTool();
 			replTool.runtimeProvidersFactory = runtimeProvidersFactory;
@@ -264,10 +270,10 @@ const renderApp = () => {
 						children: icon(History, "sm"),
 						onClick: () => {
 							SessionListDialog.open(
-								async (sessionId) => {
+								async (sessionId: string) => {
 									await loadSession(sessionId);
 								},
-								(deletedSessionId) => {
+								(deletedSessionId: string) => {
 									// Only reload if the current session was deleted
 									if (deletedSessionId === currentSessionId) {
 										newSession();
