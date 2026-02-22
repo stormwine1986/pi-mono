@@ -1,6 +1,18 @@
 # Changelog
 
-## [Unreleased]
+## [0.54.0] - 2026-02-19
+
+## [0.53.1] - 2026-02-19
+
+## [0.53.0] - 2026-02-17
+
+## [0.52.12] - 2026-02-13
+
+### Added
+
+- Added `transport` to `AgentOptions` and `AgentLoopConfig` forwarding, allowing stream transport preference (`"sse"`, `"websocket"`, `"auto"`) to flow into provider calls.
+
+## [0.52.11] - 2026-02-13
 
 ## [0.52.10] - 2026-02-12
 
