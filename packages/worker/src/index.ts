@@ -59,7 +59,7 @@ async function main() {
 				const payload = {
 					id: taskId,
 					source: "internal",
-					prompt: "向用户发出你的问候",
+					prompt: "新的会话已经开启，向用户发出简短问候。如果需要答复当前系统时间，请执行 `date` 命令后在答复，禁止编造当前时间。",
 				};
 				await redisPublisher.xadd(inputQueue, "*", "payload", JSON.stringify(payload));
 			}
@@ -128,6 +128,7 @@ async function main() {
 			}
 
 			log(`Processing task ${id || ""}: ${prompt}`);
+			process.env["PI_TASK_ID"] = id;
 
 			// Subscribe to session events to collect the response and emit progress
 			let responseText = "";
