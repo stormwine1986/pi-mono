@@ -40,6 +40,7 @@ FROM node:20-slim
 RUN apt-get update && apt-get install -y \
     curl \
     jq \
+    sqlite3 \
     ca-certificates \
     gnupg \
     lsb-release \
