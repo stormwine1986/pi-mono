@@ -62,7 +62,7 @@ async function main() {
 					source: "internal",
 					prompt: "新的会话已经开启，向用户发出简短问候。如果需要答复当前系统时间，请执行 `date` 命令后在答复，禁止编造当前时间。",
 				};
-				await redisPublisher.xadd(inputQueue, "*", "payload", JSON.stringify(payload));
+				await (redisPublisher as any).xadd(inputQueue, "MAXLEN", "~", 1000, "*", "payload", JSON.stringify(payload));
 			}
 		} catch (_e) {
 			error(`[Control] Failed to parse control signal as JSON: ${rawSignal}`);
@@ -203,7 +203,7 @@ async function main() {
 				}
 
 				if (progress) {
-					redisPublisher.xadd(outputQueue, "*", "payload", JSON.stringify(progress)).catch((err) => {
+					(redisPublisher as any).xadd(outputQueue, "MAXLEN", "~", 1000, "*", "payload", JSON.stringify(progress)).catch((err: any) => {
 						error("Failed to publish progress event:", err);
 					});
 				}
@@ -219,7 +219,7 @@ async function main() {
 					status: "success",
 				};
 
-				await redisPublisher.xadd(outputQueue, "*", "payload", JSON.stringify(resultPayload));
+				await (redisPublisher as any).xadd(outputQueue, "MAXLEN", "~", 1000, "*", "payload", JSON.stringify(resultPayload));
 			} catch (err: any) {
 				if (err.message === "Aborted") {
 					log(`Task ${id} was aborted by user.`);
@@ -231,7 +231,7 @@ async function main() {
 					error: err.message === "Aborted" ? "Task aborted by user" : err.message,
 					status: "error",
 				};
-				await redisPublisher.xadd(outputQueue, "*", "payload", JSON.stringify(errorPayload));
+				await (redisPublisher as any).xadd(outputQueue, "MAXLEN", "~", 1000, "*", "payload", JSON.stringify(errorPayload));
 			} finally {
 				unsubscribe();
 				currentTaskId = undefined;
