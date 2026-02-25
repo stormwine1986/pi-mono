@@ -1,5 +1,6 @@
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, extname } from "node:path";
+import { readFile } from "node:fs/promises";
 import { createAgentSession } from "@mariozechner/pi-coding-agent";
 import { Redis } from "ioredis";
 import { consumerGroup, consumerName, controlChannel, inputQueue, outputQueue, redisUrl } from "./config.js";
@@ -118,7 +119,7 @@ async function main() {
 				continue;
 			}
 
-			const { id, prompt } = payload;
+			const { id, prompt, images: imagePaths } = payload;
 			currentTaskId = id;
 
 			if (!prompt) {
@@ -129,6 +130,34 @@ async function main() {
 
 			log(`Processing task ${id || ""}: ${prompt}`);
 			process.env["PI_TASK_ID"] = id;
+
+			// Build ImageContent[] from image paths if present
+			const imageContents: Array<{ type: "image"; data: string; mimeType: string }> = [];
+			if (imagePaths && imagePaths.length > 0) {
+				for (const relPath of imagePaths) {
+					try {
+						const fullPath = join(workspaceDir, relPath);
+						const buffer = await readFile(fullPath);
+						const ext = extname(relPath).toLowerCase();
+						const mimeMap: Record<string, string> = {
+							".jpg": "image/jpeg",
+							".jpeg": "image/jpeg",
+							".png": "image/png",
+							".gif": "image/gif",
+							".webp": "image/webp",
+						};
+						const mimeType = mimeMap[ext] || "image/jpeg";
+						imageContents.push({
+							type: "image",
+							data: buffer.toString("base64"),
+							mimeType,
+						});
+						log(`Loaded image: ${relPath} (${buffer.length} bytes, ${mimeType})`);
+					} catch (imgErr) {
+						error(`Failed to load image ${relPath}:`, imgErr);
+					}
+				}
+			}
 
 			// Subscribe to session events to collect the response and emit progress
 			let responseText = "";
@@ -181,7 +210,7 @@ async function main() {
 			});
 
 			try {
-				await session.prompt(prompt);
+				await session.prompt(prompt, imageContents.length > 0 ? { images: imageContents } : undefined);
 				log(`Task ${id} completed.`);
 
 				const resultPayload: WorkerResponse = {
