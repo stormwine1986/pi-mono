@@ -41,6 +41,7 @@ RUN apt-get update && apt-get install -y \
     curl \
     jq \
     sqlite3 \
+    rclone \
     ca-certificates \
     gnupg \
     lsb-release \
