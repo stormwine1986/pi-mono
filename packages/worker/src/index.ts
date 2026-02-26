@@ -73,16 +73,6 @@ async function main() {
 	log(`Listening for messages on queue: ${inputQueue}`);
 	log(`Using model: ${agent.state.model?.provider}:${agent.state.model?.id} (Thinking: ${agent.state.thinkingLevel})`);
 
-	// If this is a brand new session, trigger a greeting with model information
-	if (agent.state.messages.length === 0) {
-		const modelInfo = `${agent.state.model?.provider}:${agent.state.model?.id} (思维层级: ${agent.state.thinkingLevel})`;
-		const payload = {
-			id: `startup-${Date.now()}`,
-			source: "internal",
-			prompt: `新的会话已经开启。当前模型设定：${modelInfo}。请向用户发出简短问候，并在问候中包含这些模型设定信息。如果需要答复当前系统时间，请执行 \`date\` 命令后在答复，禁止编造当前时间。`,
-		};
-		await (redisPublisher as any).xadd(inputQueue, "MAXLEN", "~", 1000, "*", "payload", JSON.stringify(payload));
-	}
 
 	while (true) {
 		try {
@@ -173,7 +163,7 @@ async function main() {
 
 			// Subscribe to session events to collect the response and emit progress
 			let responseText = "";
-			const unsubscribe = session.subscribe((event: any) => {
+			const unsubscribe = session.subscribe(async (event: any) => {
 				// Collect response text
 				if (event.type === "message_end" && event.message.role === "assistant") {
 					for (const block of event.message.content) {
@@ -181,6 +171,7 @@ async function main() {
 							responseText += block.text;
 						}
 					}
+					log(`[Worker] Collected text from message_end: ${responseText.length} chars accumulated`);
 				}
 
 				// Emit progress events
@@ -215,7 +206,8 @@ async function main() {
 				}
 
 				if (progress) {
-					(redisPublisher as any).xadd(outputQueue, "MAXLEN", "~", 1000, "*", "payload", JSON.stringify(progress)).catch((err: any) => {
+					// Publish progress event and await to maintain order
+					await (redisPublisher as any).xadd(outputQueue, "MAXLEN", "~", 1000, "*", "payload", JSON.stringify(progress)).catch((err: any) => {
 						error("Failed to publish progress event:", err);
 					});
 				}
