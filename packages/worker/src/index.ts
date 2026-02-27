@@ -1,7 +1,7 @@
 import { homedir } from "node:os";
 import { join, extname } from "node:path";
 import { readFile } from "node:fs/promises";
-import { createAgentSession } from "@mariozechner/pi-coding-agent";
+import { createAgentSession, SessionManager } from "@mariozechner/pi-coding-agent";
 import { Redis } from "ioredis";
 import { consumerGroup, consumerName, controlChannel, inputQueue, outputQueue, redisUrl } from "./config.js";
 import { error, log } from "./logger.js";
@@ -16,10 +16,15 @@ async function main() {
 	log(`State directory: ${stateDir}`);
 	log(`Workspace directory: ${workspaceDir}`);
 
+	const safePath = `--${workspaceDir.replace(/^[/\\]/, "").replace(/[/\\:]/g, "-")}--`;
+	const sessionDir = join(agentDir, "sessions", safePath);
+	const sessionManager = SessionManager.continueRecent(workspaceDir, sessionDir);
+
 	// Initialize agent session (loads settings, auth, tools, and system prompt)
 	const { session } = await createAgentSession({
 		cwd: workspaceDir,
 		agentDir: agentDir,
+		sessionManager: sessionManager,
 	});
 	const agent = session.agent;
 
