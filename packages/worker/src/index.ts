@@ -169,6 +169,7 @@ async function main() {
 			// Subscribe to session events to collect the response and emit progress
 			let responseText = "";
 			const unsubscribe = session.subscribe(async (event: any) => {
+				log(`[Session Event] Type: ${event.type}`);
 				// Collect response text
 				if (event.type === "message_end" && event.message.role === "assistant") {
 					for (const block of event.message.content) {
