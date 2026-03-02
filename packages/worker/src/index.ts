@@ -181,42 +181,33 @@ async function main() {
 				}
 
 				// Emit progress events
-				let progress: WorkerResponse | null = null;
+				let progress: WorkerResponse = { id, status: "progress", event: event.type };
+
 				switch (event.type) {
 					case "message_start":
-						if (event.message.role === "assistant") {
-							progress = { id, status: "progress", event: "llm_start" };
+						if (event.message?.role === "assistant") {
+							progress.event = "llm_start";
 						}
 						break;
 					case "message_end":
-						if (event.message.role === "assistant") {
-							progress = { id, status: "progress", event: "llm_end" };
+						if (event.message?.role === "assistant") {
+							progress.event = "llm_end";
 						}
 						break;
 					case "tool_execution_start":
-						progress = {
-							id,
-							status: "progress",
-							event: "tool_start",
-							data: { tool: event.toolName, args: event.args },
-						};
+						progress.event = "tool_start";
+						progress.data = { tool: event.toolName, args: event.args };
 						break;
 					case "tool_execution_end":
-						progress = {
-							id,
-							status: "progress",
-							event: "tool_end",
-							data: { tool: event.toolName, result: event.result, isError: event.isError },
-						};
+						progress.event = "tool_end";
+						progress.data = { tool: event.toolName, result: event.result, isError: event.isError };
 						break;
 				}
 
-				if (progress) {
-					// Publish progress event and await to maintain order
-					await (redisPublisher as any).xadd(outputQueue, "MAXLEN", "~", 1000, "*", "payload", JSON.stringify(progress)).catch((err: any) => {
-						error("Failed to publish progress event:", err);
-					});
-				}
+				// Publish progress event and await to maintain order
+				await (redisPublisher as any).xadd(outputQueue, "MAXLEN", "~", 1000, "*", "payload", JSON.stringify(progress)).catch((err: any) => {
+					error("Failed to publish progress event:", err);
+				});
 			});
 
 			try {

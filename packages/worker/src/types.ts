@@ -12,7 +12,7 @@ export type WorkerResponse = {
 } & (
 		| { status: "success"; response: string; images?: string[] }
 		| { status: "error"; error: string }
-		| { status: "progress"; event: "llm_start" | "llm_end" | "tool_start" | "tool_end" | "send_media"; data?: any }
+		| { status: "progress"; event: string; data?: any }
 	);
 
 export interface WorkerControlSignal {
