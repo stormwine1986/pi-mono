@@ -68,7 +68,7 @@ async function main() {
 					id: taskId,
 					user_id: signal.user_id || "internal",
 					source: signal.source || "internal",
-					prompt: `新的会话已经开启。当前模型设定：${modelInfo}。请向用户发出简短问候，并在问候中包含这些模型设定信息。如果需要答复当前系统时间，请执行 \`date\` 命令后在答复，禁止编造当前时间。`,
+					prompt: `新会话已经开启。\n当前模型设定：${modelInfo}。\n会话所属用户ID：${signal.user_id}。\n\n从记忆里检索有关用户的基本信息，请向用户发出简短问候，并在问候中包含模型设定信息。\n如果需要答复当前系统时间，请执行 \`date\` 命令后在答复，禁止编造当前时间。`,
 				};
 				await (redisPublisher as any).xadd(inputQueue, "MAXLEN", "~", 1000, "*", "payload", JSON.stringify(payload));
 			}

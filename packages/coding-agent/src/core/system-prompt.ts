@@ -71,10 +71,7 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions = {}): strin
 			prompt += "\n\n# Workspace Context\n\n";
 			prompt += "The following workspace context files define your persona and guidelines:\n";
 			prompt += "- If SOUL.md is present, embody its persona and tone strictly. Avoid generic AI responses.\n";
-			prompt += "- If IDENTITY.md is present, it defines who you are and your core capabilities.\n";
-			prompt +=
-				"- If USER.md is present, it contains specific preferences and info about the user you are helping.\n";
-			prompt += "- If MEMORY.md is present, it contains important long-term context from previous sessions.\n\n";
+			prompt += "- If IDENTITY.md is present, it defines who you are and your core capabilities.\n\n";
 			for (const { path: filePath, content } of contextFiles) {
 				prompt += `## ${basename(filePath)}\n\n${content}\n\n`;
 			}
@@ -171,9 +168,7 @@ Pi documentation (read only when the user asks about pi itself, its SDK, extensi
 		prompt += "\n\n# Project Context\n\n";
 		prompt += "The following workspace context files define your persona and guidelines:\n";
 		prompt += "- If SOUL.md is present, embody its persona and tone strictly. Avoid generic AI responses.\n";
-		prompt += "- If IDENTITY.md is present, it defines who you are and your core capabilities.\n";
-		prompt += "- If USER.md is present, it contains specific preferences and info about the user you are helping.\n";
-		prompt += "- If MEMORY.md is present, it contains important long-term context from previous sessions.\n\n";
+		prompt += "- If IDENTITY.md is present, it defines who you are and your core capabilities.\n\n";
 
 		for (const { path: filePath, content } of contextFiles) {
 			prompt += `## ${basename(filePath)}\n\n${content}\n\n`;
