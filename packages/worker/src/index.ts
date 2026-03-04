@@ -12,6 +12,7 @@ async function main() {
 	const stateDir = process.env["PI-STATE-DIR"] || join(homedir(), ".pi");
 	const agentDir = join(stateDir, "agent");
 	const workspaceDir = process.env["PI-WORKSPACE-DIR"] || join(agentDir, "workspace");
+	const agentId = process.env["AGENT_ID"] || "0";
 
 	log(`State directory: ${stateDir}`);
 	log(`Workspace directory: ${workspaceDir}`);
@@ -65,7 +66,8 @@ async function main() {
 				const modelInfo = `${agent.state.model?.provider}:${agent.state.model?.id} (思维层级: ${agent.state.thinkingLevel})`;
 				const payload = {
 					id: taskId,
-					source: "internal",
+					user_id: signal.user_id || "internal",
+					source: signal.source || "internal",
 					prompt: `新的会话已经开启。当前模型设定：${modelInfo}。请向用户发出简短问候，并在问候中包含这些模型设定信息。如果需要答复当前系统时间，请执行 \`date\` 命令后在答复，禁止编造当前时间。`,
 				};
 				await (redisPublisher as any).xadd(inputQueue, "MAXLEN", "~", 1000, "*", "payload", JSON.stringify(payload));
@@ -126,7 +128,7 @@ async function main() {
 				continue;
 			}
 
-			const { id, prompt, images: imagePaths } = payload;
+			const { id, user_id, source, prompt, images: imagePaths } = payload;
 			currentTaskId = id;
 
 			if (!prompt) {
@@ -181,7 +183,7 @@ async function main() {
 				}
 
 				// Emit progress events
-				let progress: WorkerResponse = { id, status: "progress", event: event.type };
+				let progress: any = { id, user_id, source, agent_id: agentId, status: "progress", event: event.type };
 
 				switch (event.type) {
 					case "message_start":
@@ -216,6 +218,9 @@ async function main() {
 
 				const resultPayload: WorkerResponse = {
 					id,
+					user_id,
+					source,
+					agent_id: agentId,
 					response: responseText,
 					status: "success",
 				};
@@ -229,6 +234,9 @@ async function main() {
 				}
 				const errorPayload: WorkerResponse = {
 					id,
+					user_id,
+					source,
+					agent_id: agentId,
 					error: err.message === "Aborted" ? "Task aborted by user" : err.message,
 					status: "error",
 				};
