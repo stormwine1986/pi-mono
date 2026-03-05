@@ -1,7 +1,7 @@
 import { homedir } from "node:os";
 import { join, extname } from "node:path";
 import { readFile } from "node:fs/promises";
-import { createAgentSession, SessionManager } from "@mariozechner/pi-coding-agent";
+import { createAgentSession, SessionManager, SettingsManager, AuthStorage, ModelRegistry } from "@mariozechner/pi-coding-agent";
 import { Redis } from "ioredis";
 import { consumerGroup, consumerName, controlChannel, inputQueue, outputQueue, redisUrl } from "./config.js";
 import { error, log } from "./logger.js";
@@ -21,11 +21,27 @@ async function main() {
 	const sessionDir = join(agentDir, "sessions", safePath);
 	const sessionManager = SessionManager.continueRecent(workspaceDir, sessionDir);
 
+	// Load settings to get default model and thinking level
+	const settingsManager = SettingsManager.create(workspaceDir, agentDir);
+	const defaultProvider = settingsManager.getDefaultProvider();
+	const defaultModelId = settingsManager.getDefaultModel();
+	const defaultThinkingLevel = settingsManager.getDefaultThinkingLevel();
+
+	// Resolve model registry to find the actual model object
+	const authStorage = AuthStorage.create(join(agentDir, "auth.json"));
+	const modelRegistry = new ModelRegistry(authStorage, join(agentDir, "models.json"));
+	const model = (defaultProvider && defaultModelId) ? modelRegistry.find(defaultProvider, defaultModelId) : undefined;
+
 	// Initialize agent session (loads settings, auth, tools, and system prompt)
 	const { session } = await createAgentSession({
 		cwd: workspaceDir,
 		agentDir: agentDir,
 		sessionManager: sessionManager,
+		settingsManager: settingsManager,
+		modelRegistry: modelRegistry,
+		authStorage: authStorage,
+		model: model,
+		thinkingLevel: defaultThinkingLevel,
 	});
 	const agent = session.agent;
 
