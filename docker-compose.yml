@@ -1,0 +1,23 @@
+services:
+  agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      network: host
+    image: pi-mono-agent:latest
+    container_name: agent
+    network_mode: host
+    depends_on:
+      redis:
+        condition: service_started
+    environment:
+      - REDIS_URL=redis://127.0.0.1:6379
+      - DKRON_URL=http://127.0.0.1:18047/v1
+      - MEMORY_URL=http://127.0.0.1:18090
+      - AGENT_ID=0
+      - LITELLM_METRICS_URL=http://127.0.0.1:4000/metrics
+      - LLAMA_SERVER_METRICS_URL=http://127.0.0.1:18080/metrics
+    volumes:
+      - ${BASE_CONFIG_PATH}/.pi:/home/pi-mono/.pi
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
