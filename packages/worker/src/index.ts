@@ -186,6 +186,7 @@ async function main() {
 
 			// Subscribe to session events to collect the response and emit progress
 			let responseText = "";
+			const toolArgsMap = new Map<string, any>();
 			const unsubscribe = session.subscribe(async (event: any) => {
 				log(`[Session Event] Type: ${event.type}`);
 				// Collect response text
@@ -213,12 +214,15 @@ async function main() {
 						}
 						break;
 					case "tool_execution_start":
+						toolArgsMap.set(event.toolCallId, event.args);
 						progress.event = "tool_start";
 						progress.data = { tool: event.toolName, args: event.args };
 						break;
 					case "tool_execution_end":
+						const args = toolArgsMap.get(event.toolCallId);
 						progress.event = "tool_end";
-						progress.data = { tool: event.toolName, result: event.result, isError: event.isError };
+						progress.data = { tool: event.toolName, args: args, result: event.result, isError: event.isError };
+						toolArgsMap.delete(event.toolCallId);
 						break;
 				}
 
