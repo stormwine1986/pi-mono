@@ -17,6 +17,10 @@ services:
       - AGENT_ID=0
       - LITELLM_METRICS_URL=http://127.0.0.1:4000/metrics
       - LLAMA_SERVER_METRICS_URL=http://127.0.0.1:18080/metrics
+      - S3_ENDPOINT=http://127.0.0.1:3900
+      - S3_REGION=garage
+      - S3_ACCESS_KEY_ID=GK15ff93042b2774e33d09725b
+      - S3_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY}
     volumes:
       - ${BASE_CONFIG_PATH}/.pi:/home/pi-mono/.pi
       - /var/run/docker.sock:/var/run/docker.sock
