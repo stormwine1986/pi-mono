@@ -3,7 +3,7 @@ export interface WorkerTask {
 	user_id?: string;
 	source?: string;
 	prompt?: string;
-	images?: string[]; // Relative paths to images in workspace (e.g. ".gateway/abc.jpg")
+	images?: string[]; // Relative paths to images in workspace (e.g. ".console/abc.jpg")
 	[key: string]: any;
 }
 
