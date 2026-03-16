@@ -64,8 +64,8 @@ async function main() {
 	let currentTaskId: string | undefined;
 
 	log(`Subscribing to shared control channel: ${controlChannel}`);
-	await redisSubscriber.subscribe(controlChannel);
-	redisSubscriber.on("message", async (_channel, rawSignal) => {
+	redisSubscriber.on("message", async (channel, rawSignal) => {
+		log(`[Control] Received message on channel ${channel}: ${rawSignal}`);
 		try {
 			const signal: WorkerControlSignal = JSON.parse(rawSignal);
 			if (signal.command === "stop") {
@@ -87,11 +87,15 @@ async function main() {
 					prompt: `新会话已经开启。\n当前模型设定：${modelInfo}。\n会话所属用户ID：${signal.user_id}。\n\n从记忆里检索有关用户的基本信息，请向用户发出简短问候，并在问候中包含模型设定信息。\n如果需要答复当前系统时间，请执行 \`date\` 命令后在答复，禁止编造当前时间。`,
 				};
 				await (redisPublisher as any).xadd(inputQueue, "MAXLEN", "~", 1000, "*", "payload", JSON.stringify(payload));
+				log(`[Reset] Pushed new session greeting to ${inputQueue}`);
 			}
-		} catch (_e) {
-			error(`[Control] Failed to parse control signal as JSON: ${rawSignal}`);
+		} catch (e: any) {
+			error(`[Control] Failed to process control signal: ${e.message}. Raw: ${rawSignal}`);
 		}
 	});
+
+	await redisSubscriber.subscribe(controlChannel);
+	log(`Successfully subscribed to ${controlChannel}`);
 
 	log(`Listening for messages on queue: ${inputQueue}`);
 	log(`Using model: ${agent.state.model?.provider}:${agent.state.model?.id} (Thinking: ${agent.state.thinkingLevel})`);
