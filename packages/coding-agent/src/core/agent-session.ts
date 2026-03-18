@@ -1598,6 +1598,7 @@ export class AgentSession {
 			const firstKeptEntry = branchEntries[firstKeptIndex];
 			if (firstKeptEntry && firstKeptEntry.id) {
 				const fakeSummary = "[INFO] Session segment archived seamlessly to Memory Service. (Local active window retained 15 turns)";
+				console.log(`[AgentSession] Context offload triggered: turnCount=${turnIndices.length}, firstKeptId=${firstKeptEntry.id}`);
 				this.sessionManager.appendCompaction(fakeSummary, firstKeptEntry.id, 0, undefined, false);
 				const sessionContext = this.sessionManager.buildSessionContext();
 				this.agent.replaceMessages(sessionContext.messages);
