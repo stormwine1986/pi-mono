@@ -1566,31 +1566,55 @@ export class AgentSession {
 		const settings = this.settingsManager.getCompactionSettings();
 		if (!settings.enabled) return;
 
-		// Skip if message was aborted (user cancelled) - unless skipAbortedCheck is false
+		// Skip if message was aborted (user cancelled)
 		if (skipAbortedCheck && assistantMessage.stopReason === "aborted") return;
 
-		const contextWindow = this.model?.contextWindow ?? 0;
+		// --- NEW LOGIC: Fast rolling window (Memory Service handles long-term storage) ---
+		const branchEntries = this.sessionManager.getBranch();
+		
+		let startIdx = 0;
+		for (let i = branchEntries.length - 1; i >= 0; i--) {
+			if (branchEntries[i].type === "compaction") {
+				startIdx = i + 1;
+				break;
+			}
+		}
 
-		// Skip overflow check if the message came from a different model.
-		// This handles the case where user switched from a smaller-context model (e.g. opus)
-		// to a larger-context model (e.g. codex) - the overflow error from the old model
-		// shouldn't trigger compaction for the new model.
+		const activeEntries = branchEntries.slice(startIdx);
+		const turnIndices: number[] = [];
+		
+		for (let i = 0; i < activeEntries.length; i++) {
+			const entry = activeEntries[i];
+			if (entry.type === "message" && entry.message.role === "user") {
+				turnIndices.push(startIdx + i);
+			} else if (entry.type === "branch_summary" || entry.type === "custom_message") {
+				turnIndices.push(startIdx + i);
+			}
+		}
+
+		// When accumulated beyond 20 turns, drop the first 5 turns unconditionally
+		if (turnIndices.length > 20) {
+			const firstKeptIndex = turnIndices[5];
+			const firstKeptEntry = branchEntries[firstKeptIndex];
+			if (firstKeptEntry && firstKeptEntry.id) {
+				const fakeSummary = "[INFO] Session segment archived seamlessly to Memory Service. (Local active window retained 15 turns)";
+				this.sessionManager.appendCompaction(fakeSummary, firstKeptEntry.id, 0, undefined, false);
+				const sessionContext = this.sessionManager.buildSessionContext();
+				this.agent.replaceMessages(sessionContext.messages);
+				return;
+			}
+		}
+
+		// --- FALLBACK LOGIC ---
+		const contextWindow = this.model?.contextWindow ?? 0;
 		const sameModel =
 			this.model && assistantMessage.provider === this.model.provider && assistantMessage.model === this.model.id;
-
-		// Skip overflow check if the error is from before a compaction in the current path.
-		// This handles the case where an error was kept after compaction (in the "kept" region).
-		// The error shouldn't trigger another compaction since we already compacted.
-		// Example: opus fails → switch to codex → compact → switch back to opus → opus error
-		// is still in context but shouldn't trigger compaction again.
 		const compactionEntry = getLatestCompactionEntry(this.sessionManager.getBranch());
 		const errorIsFromBeforeCompaction =
 			compactionEntry !== null && assistantMessage.timestamp < new Date(compactionEntry.timestamp).getTime();
 
 		// Case 1: Overflow - LLM returned context overflow error
 		if (sameModel && !errorIsFromBeforeCompaction && isContextOverflow(assistantMessage, contextWindow)) {
-			// Remove the error message from agent state (it IS saved to session for history,
-			// but we don't want it in context for the retry)
 			const messages = this.agent.state.messages;
 			if (messages.length > 0 && messages[messages.length - 1].role === "assistant") {
 				this.agent.replaceMessages(messages.slice(0, -1));
@@ -1599,14 +1623,8 @@ export class AgentSession {
 			return;
 		}
 
-		// Case 2: Threshold - turn succeeded but context is getting large
-		// Skip if this was an error (non-overflow errors don't have usage data)
-		if (assistantMessage.stopReason === "error") return;
-
-		const contextTokens = calculateContextTokens(assistantMessage.usage);
-		if (shouldCompact(contextTokens, contextWindow, settings)) {
-			await this._runAutoCompaction("threshold", false);
-		}
+		// Case 2: Threshold - ignored because the sliding window handles this far faster and cheaper
+		// We only let the token LLM summarizer run if an actual overflow occurs.
 	}
 
 	/**
