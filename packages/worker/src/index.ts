@@ -150,6 +150,7 @@ async function main() {
 
 			const { id, user_id, source, prompt, images: imagePaths } = payload;
 			currentTaskId = id;
+			const sessionId = sessionManager.getSessionId();
 
 			if (!prompt) {
 				error("Message missing prompt:", payload);
@@ -204,7 +205,15 @@ async function main() {
 				}
 
 				// Emit progress events
-				let progress: any = { id, user_id, source, agent_id: agentId, status: "progress", event: event.type };
+				let progress: any = {
+					id,
+					user_id,
+					source,
+					agent_id: agentId,
+					session_id: session.sessionId,
+					status: "progress",
+					event: event.type,
+				};
 
 				switch (event.type) {
 					case "message_start":
@@ -238,6 +247,15 @@ async function main() {
 
 			try {
 				await session.prompt(prompt, imageContents.length > 0 ? { images: imageContents } : undefined);
+
+				// Re-check for abortion if session.prompt() didn't throw
+				const lastAssistant = agent.state.messages
+					.filter((m) => m.role === "assistant")
+					.slice(-1)[0] as any;
+				if (lastAssistant?.stopReason === "aborted") {
+					throw new Error("Aborted");
+				}
+
 				log(`Task ${id} completed.`);
 
 				const resultPayload: WorkerResponse = {
@@ -245,13 +263,16 @@ async function main() {
 					user_id,
 					source,
 					agent_id: agentId,
+					session_id: session.sessionId,
 					response: responseText,
+					usage: lastAssistant?.usage,
 					status: "success",
 				};
 
 				await (redisPublisher as any).xadd(outputQueue, "MAXLEN", "~", 1000, "*", "payload", JSON.stringify(resultPayload));
 			} catch (err: any) {
-				if (err.message === "Aborted") {
+				const isAborted = err.message === "Aborted";
+				if (isAborted) {
 					log(`Task ${id} was aborted by user.`);
 				} else {
 					error(`Error processing task ${id}:`, err);
@@ -261,8 +282,9 @@ async function main() {
 					user_id,
 					source,
 					agent_id: agentId,
-					error: err.message === "Aborted" ? "Task aborted by user" : err.message,
-					status: "error",
+					session_id: session.sessionId,
+					error: isAborted ? "Task aborted by user" : err.message,
+					status: isAborted ? "aborted" : "error",
 				};
 				await (redisPublisher as any).xadd(outputQueue, "MAXLEN", "~", 1000, "*", "payload", JSON.stringify(errorPayload));
 			} finally {

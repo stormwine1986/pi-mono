@@ -13,9 +13,23 @@ export type WorkerResponse = {
 	user_id?: string;
 	source?: string;
 	agent_id?: string;
+	session_id?: string;
 } & (
-		| { status: "success"; response: string; images?: string[] }
+		| {
+				status: "success";
+				response: string;
+				images?: string[];
+				usage?: {
+					input: number;
+					output: number;
+					cacheRead: number;
+					cacheWrite: number;
+					totalTokens: number;
+					cost: { input: number; output: number; cacheRead: number; cacheWrite: number; total: number };
+				};
+		  }
 		| { status: "error"; error: string }
+		| { status: "aborted"; error: string }
 		| { status: "progress"; event: string; data?: any }
 	);
 
