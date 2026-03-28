@@ -53,13 +53,20 @@ Edit directly or use `/settings` for common options.
 | `compaction.enabled` | boolean | `true` | Enable auto-compaction |
 | `compaction.reserveTokens` | number | `16384` | Tokens reserved for LLM response |
 | `compaction.keepRecentTokens` | number | `20000` | Recent tokens to keep (not summarized) |
+| `compaction.keepSize` | number | `20` | Threshold of turns before triggering offload |
+| `compaction.unloadSize` | number | `5` | Number of older turns to offload when triggered |
+
+> [!NOTE]
+> `keepSize` and `unloadSize` can also be defined via environment variables `PI_SESSION_KEEP_SIZE` and `PI_SESSION_UNLOAD_SIZE`.
 
 ```json
 {
   "compaction": {
     "enabled": true,
     "reserveTokens": 16384,
-    "keepRecentTokens": 20000
+    "keepRecentTokens": 20000,
+    "keepSize": 20,
+    "unloadSize": 5
   }
 }
 ```

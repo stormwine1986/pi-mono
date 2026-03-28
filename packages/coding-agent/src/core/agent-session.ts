@@ -1592,13 +1592,14 @@ export class AgentSession {
 			}
 		}
 
-		// When accumulated beyond 20 turns, drop the first 5 turns unconditionally
-		if (turnIndices.length > 20) {
-			const firstKeptIndex = turnIndices[5];
+		// When accumulated beyond threshold (default 20), drop the first segment (default 5)
+		if (turnIndices.length > settings.keepSize) {
+			const firstKeptIndex = turnIndices[settings.unloadSize];
 			const firstKeptEntry = branchEntries[firstKeptIndex];
 			if (firstKeptEntry && firstKeptEntry.id) {
-				const fakeSummary = "[INFO] Session segment archived seamlessly to Memory Service. (Local active window retained 15 turns)";
-				console.log(`[AgentSession] Context offload triggered: turnCount=${turnIndices.length}, firstKeptId=${firstKeptEntry.id}`);
+				const retainedTurns = turnIndices.length - settings.unloadSize;
+				const fakeSummary = `[INFO] Session segment archived seamlessly to Memory Service. (Local active window retained ${retainedTurns} turns)`;
+				console.log(`[AgentSession] Context offload triggered: turnCount=${turnIndices.length}, firstKeptId=${firstKeptEntry.id}, retainedTurns=${retainedTurns}`);
 				this.sessionManager.appendCompaction(fakeSummary, firstKeptEntry.id, 0, undefined, false);
 				const sessionContext = this.sessionManager.buildSessionContext();
 				this.agent.replaceMessages(sessionContext.messages);

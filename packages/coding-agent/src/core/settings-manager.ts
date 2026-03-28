@@ -8,6 +8,8 @@ export interface CompactionSettings {
 	enabled?: boolean; // default: true
 	reserveTokens?: number; // default: 16384
 	keepRecentTokens?: number; // default: 20000
+	keepSize?: number; // default: 20 (turns)
+	unloadSize?: number; // default: 5 (turns)
 }
 
 export interface BranchSummarySettings {
@@ -591,11 +593,43 @@ export class SettingsManager {
 		return this.settings.compaction?.keepRecentTokens ?? 20000;
 	}
 
-	getCompactionSettings(): { enabled: boolean; reserveTokens: number; keepRecentTokens: number } {
+	getCompactionKeepSize(): number {
+		if (this.settings.compaction?.keepSize !== undefined) {
+			return this.settings.compaction.keepSize;
+		}
+		const env = process.env.PI_SESSION_KEEP_SIZE;
+		if (env) {
+			const parsed = parseInt(env, 10);
+			if (!Number.isNaN(parsed)) return parsed;
+		}
+		return 20;
+	}
+
+	getCompactionUnloadSize(): number {
+		if (this.settings.compaction?.unloadSize !== undefined) {
+			return this.settings.compaction.unloadSize;
+		}
+		const env = process.env.PI_SESSION_UNLOAD_SIZE;
+		if (env) {
+			const parsed = parseInt(env, 10);
+			if (!Number.isNaN(parsed)) return parsed;
+		}
+		return 5;
+	}
+
+	getCompactionSettings(): {
+		enabled: boolean;
+		reserveTokens: number;
+		keepRecentTokens: number;
+		keepSize: number;
+		unloadSize: number;
+	} {
 		return {
 			enabled: this.getCompactionEnabled(),
 			reserveTokens: this.getCompactionReserveTokens(),
 			keepRecentTokens: this.getCompactionKeepRecentTokens(),
+			keepSize: this.getCompactionKeepSize(),
+			unloadSize: this.getCompactionUnloadSize(),
 		};
 	}
 

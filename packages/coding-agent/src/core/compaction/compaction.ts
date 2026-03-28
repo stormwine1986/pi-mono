@@ -109,12 +109,16 @@ export interface CompactionSettings {
 	enabled: boolean;
 	reserveTokens: number;
 	keepRecentTokens: number;
+	keepSize: number;
+	unloadSize: number;
 }
 
 export const DEFAULT_COMPACTION_SETTINGS: CompactionSettings = {
 	enabled: true,
 	reserveTokens: 16384,
 	keepRecentTokens: 20000,
+	keepSize: 20,
+	unloadSize: 5,
 };
 
 // ============================================================================
