@@ -11,6 +11,9 @@ RUN apt-get update && apt-get install -y \
     git \
     && rm -rf /var/lib/apt/lists/*
 
+# Set npm mirror
+RUN npm config set registry https://registry.npmmirror.com/
+
 # Copy workspace configuration
 COPY package.json package-lock.json ./
 COPY packages/ai/package.json ./packages/ai/

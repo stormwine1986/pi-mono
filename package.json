@@ -50,6 +50,7 @@
 	},
 	"overrides": {
 		"rimraf": "6.1.2",
+		"axios": "1.14.0",
 		"gaxios": {
 			"rimraf": "6.1.2"
 		}
