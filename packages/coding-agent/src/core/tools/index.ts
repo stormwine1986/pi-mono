@@ -9,6 +9,10 @@ export {
 	createBashTool,
 } from "./bash.js";
 export {
+	type ServiceBashInput,
+	serviceBashTool,
+} from "./service-bash.js";
+export {
 	createEditTool,
 	type EditOperations,
 	type EditToolDetails,
@@ -74,6 +78,7 @@ import { createGrepTool, grepTool } from "./grep.js";
 import { createLsTool, lsTool } from "./ls.js";
 import { createReadTool, type ReadToolOptions, readTool } from "./read.js";
 import { createWriteTool, writeTool } from "./write.js";
+import { serviceBashTool } from "./service-bash.js";
 
 /** Tool type (AgentTool from pi-ai) */
 export type Tool = AgentTool<any>;
@@ -93,6 +98,7 @@ export const allTools = {
 	grep: grepTool,
 	find: findTool,
 	ls: lsTool,
+	serviceBash: serviceBashTool,
 };
 
 export type ToolName = keyof typeof allTools;
@@ -135,5 +141,6 @@ export function createAllTools(cwd: string, options?: ToolsOptions): Record<Tool
 		grep: createGrepTool(cwd),
 		find: createFindTool(cwd),
 		ls: createLsTool(cwd),
+		serviceBash: serviceBashTool,
 	};
 }
