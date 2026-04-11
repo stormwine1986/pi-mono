@@ -1,0 +1,9 @@
+services:
+  agent:
+    image: pi-mono-agent:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+      network: host
+    profiles:
+      - build-only
