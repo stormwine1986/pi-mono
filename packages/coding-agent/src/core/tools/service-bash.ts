@@ -44,9 +44,10 @@ export const serviceBashTool: AgentTool<typeof serviceBashSchema> = {
             timeout
         };
         
+        const owner = process.env.OWNER || "0";
         try {
             await client.xadd(
-                "agent:tool:requests",
+                `user:${owner}:agent:call`,
                 "MAXLEN",
                 "~",
                 1000,
@@ -55,7 +56,7 @@ export const serviceBashTool: AgentTool<typeof serviceBashSchema> = {
                 JSON.stringify(requestPayload)
             );
             
-            const responseKey = `agent:tool:response:${taskId}`;
+            const responseKey = `user:${owner}:agent:ans:${taskId}`;
             
             // BLPOP returns conceptually [key, value] or null if timeout
             const result = await client.blpop(responseKey, timeout);
