@@ -93,4 +93,5 @@ VOLUME ["/home/pi-mono/.pi"]
 USER pi-mono
 
 # Use the worker's start script
+ENTRYPOINT ["/app/scripts/entrypoint.sh"]
 CMD ["npm", "run", "start", "-w", "@mariozechner/pi-worker"]
