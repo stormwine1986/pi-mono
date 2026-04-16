@@ -3,8 +3,9 @@ import { join, extname } from "node:path";
 import { readFile } from "node:fs/promises";
 import { createAgentSession, SessionManager, SettingsManager, AuthStorage, ModelRegistry } from "@mariozechner/pi-coding-agent";
 import { Redis } from "ioredis";
-import { consumerGroup, consumerName, controlChannel, inputQueue, outputQueue, redisUrl } from "./config.js";
+import { consumerGroup, consumerName, controlChannel, inputQueue, outputQueue, owner, redisUrl } from "./config.js";
 import { error, log } from "./logger.js";
+import { RedisSessionStore } from "./session-store.js";
 import type { WorkerControlSignal, WorkerResponse, WorkerTask } from "./types.js";
 
 async function main() {
@@ -17,9 +18,22 @@ async function main() {
 	log(`State directory: ${stateDir}`);
 	log(`Workspace directory: ${workspaceDir}`);
 
-	const safePath = `--${workspaceDir.replace(/^[/\\]/, "").replace(/[/\\:]/g, "-")}--`;
-	const sessionDir = join(agentDir, "sessions", safePath);
-	const sessionManager = SessionManager.continueRecent(workspaceDir, sessionDir);
+	// Keep session runtime in memory; persistence is handled by RedisSessionStore.
+	const sessionManager = SessionManager.inMemory(workspaceDir);
+
+	log(`Connecting to Redis at ${redisUrl}...`);
+	const redis = new Redis(redisUrl);
+	const redisPublisher = new Redis(redisUrl);
+	const redisSubscriber = new Redis(redisUrl);
+	const redisSessionStore = RedisSessionStore.fromEnv(redisPublisher, owner, log);
+
+	// Restore session from Redis if it exists
+	const restored = await redisSessionStore.restoreAndBind(sessionManager.getSessionId());
+	if (restored.header || restored.entries.length > 0) {
+		const allEntries = restored.header ? [restored.header, ...restored.entries] : restored.entries;
+		sessionManager.loadEntries(allEntries as any);
+		log(`[SessionStore] Restored session ${sessionManager.getSessionId()} with ${allEntries.length} entries.`);
+	}
 
 	// Load settings to get default model and thinking level
 	const settingsManager = SettingsManager.create(workspaceDir, agentDir);
@@ -44,11 +58,6 @@ async function main() {
 		thinkingLevel: defaultThinkingLevel,
 	});
 	const agent = session.agent;
-
-	log(`Connecting to Redis at ${redisUrl}...`);
-	const redis = new Redis(redisUrl);
-	const redisPublisher = new Redis(redisUrl);
-	const redisSubscriber = new Redis(redisUrl);
 
 	// Ensure consumer group exists
 	try {
@@ -77,6 +86,7 @@ async function main() {
 			} else if (signal.command === "reset") {
 				log(`[Reset] Received reset command for current session`);
 				await session.newSession();
+				await redisSessionStore.resetToSession(session.sessionId);
 
 				const taskId = signal.id;
 				const modelInfo = `${agent.state.model?.provider}:${agent.state.model?.id} (思维层级: ${agent.state.thinkingLevel})`;
@@ -150,7 +160,6 @@ async function main() {
 
 			const { id, user_id, source, prompt, images: imagePaths } = payload;
 			currentTaskId = id;
-			const sessionId = sessionManager.getSessionId();
 
 			if (!prompt) {
 				error("Message missing prompt:", payload);
@@ -288,6 +297,15 @@ async function main() {
 				};
 				await (redisPublisher as any).xadd(outputQueue, "MAXLEN", "~", 1000, "*", "payload", JSON.stringify(errorPayload));
 			} finally {
+				try {
+					await redisSessionStore.persistSnapshot(
+						session.sessionId,
+						sessionManager.getHeader()!,
+						sessionManager.getEntries()
+					);
+				} catch (persistErr) {
+					error("Failed to persist session snapshot to Redis:", persistErr);
+				}
 				unsubscribe();
 				currentTaskId = undefined;
 				// ACK the message after processing

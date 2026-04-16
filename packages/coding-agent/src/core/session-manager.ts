@@ -744,6 +744,26 @@ export class SessionManager {
 		return this.sessionFile;
 	}
 
+	/** Load session from raw entries (used for Redis restoration) */
+	loadEntries(entries: FileEntry[]): void {
+		if (entries.length === 0) return;
+
+		const header = entries.find((e) => e.type === "session") as SessionHeader | undefined;
+		if (!header) {
+			throw new Error("Cannot load session: no session header found in entries");
+		}
+
+		this.sessionId = header.id;
+		this.fileEntries = [...entries];
+
+		if (migrateToCurrentVersion(this.fileEntries)) {
+			this._rewriteFile();
+		}
+
+		this._buildIndex();
+		this.flushed = true;
+	}
+
 	private _buildIndex(): void {
 		this.byId.clear();
 		this.labelsById.clear();
