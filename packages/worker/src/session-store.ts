@@ -5,7 +5,8 @@ type Logger = (message: string, ...args: unknown[]) => void;
 
 interface RedisSessionStoreOptions {
 	owner: string;
-	maxEntries: number;
+	maxEntries: number; // Entries per session
+	maxSessions: number; // Max number of sessions to keep
 	log: Logger;
 }
 
@@ -22,8 +23,9 @@ interface SessionMetadata {
 	messageCount: number;
 }
 
-function parsePositiveInt(name: string, value: string | undefined): number {
+function parsePositiveInt(name: string, value: string | undefined, defaultValue?: number): number {
 	if (!value) {
+		if (defaultValue !== undefined) return defaultValue;
 		throw new Error(`Environment variable ${name} is required but not set.`);
 	}
 	const parsed = Number.parseInt(value, 10);
@@ -44,17 +46,20 @@ function safeParse<T>(raw: string): T | null {
 export class RedisSessionStore {
 	private readonly owner: string;
 	private readonly maxEntries: number;
+	private readonly maxSessions: number;
 	private readonly log: Logger;
 
 	constructor(private readonly redis: Redis, opts: RedisSessionStoreOptions) {
 		this.owner = opts.owner;
 		this.maxEntries = opts.maxEntries;
+		this.maxSessions = opts.maxSessions;
 		this.log = opts.log;
 	}
 
 	static fromEnv(redis: Redis, owner: string, log: Logger): RedisSessionStore {
 		const maxEntries = parsePositiveInt("PI_SESSION_KEEP_SIZE", process.env.PI_SESSION_KEEP_SIZE);
-		return new RedisSessionStore(redis, { owner, maxEntries, log });
+		const maxSessions = parsePositiveInt("PI_MAX_SESSIONS", process.env.PI_MAX_SESSIONS, 50);
+		return new RedisSessionStore(redis, { owner, maxEntries, maxSessions, log });
 	}
 
 	private getCurrentSessionKey(): string {
@@ -71,6 +76,10 @@ export class RedisSessionStore {
 
 	private getEntriesKey(sessionId: string): string {
 		return `user:${this.owner}:agent:session:${sessionId}:entries`;
+	}
+
+	private getMetaKey(sessionId: string): string {
+		return `user:${this.owner}:agent:session:${sessionId}:meta`;
 	}
 
 	async restoreAndBind(runtimeSessionId: string): Promise<SessionLoadResult> {
@@ -125,6 +134,7 @@ export class RedisSessionStore {
 		const indexKey = this.getSessionIndexKey();
 		const headerKey = this.getHeaderKey(sessionId);
 		const entriesKey = this.getEntriesKey(sessionId);
+		const metaKey = this.getMetaKey(sessionId);
 
 		// Keep only last N entries to avoid Redis bloat
 		const toPersist = entries.slice(-this.maxEntries);
@@ -137,6 +147,8 @@ export class RedisSessionStore {
 			messageCount: entries.filter((e) => e.type === "message").length,
 		};
 
+		const now = Date.now();
+
 		const tx = this.redis.multi();
 		tx.set(currentKey, sessionId);
 		tx.set(headerKey, JSON.stringify(header));
@@ -146,11 +158,35 @@ export class RedisSessionStore {
 			tx.ltrim(entriesKey, -this.maxEntries, -1);
 		}
 		// Update session index for listing
-		tx.zadd(indexKey, Date.now(), sessionId);
-		// Update hash with metadata if we want more details in list (optional, but good for performance)
-		tx.hset(`user:${this.owner}:agent:session:${sessionId}:meta`, metadata as any);
+		tx.zadd(indexKey, now, sessionId);
+		tx.hset(metaKey, metadata as any);
 
 		await tx.exec();
+
+		// Cleanup old sessions beyond maxSessions limit
+		await this.cleanupOldSessions();
+	}
+
+	private async cleanupOldSessions(): Promise<void> {
+		const indexKey = this.getSessionIndexKey();
+		const count = await this.redis.zcard(indexKey);
+		if (count <= this.maxSessions) return;
+
+		const overLimit = count - this.maxSessions;
+		// Oldest sessions are at the beginning of the Sorted Set (low scores)
+		const toRemove = await this.redis.zrange(indexKey, 0, overLimit - 1);
+
+		if (toRemove.length > 0) {
+			this.log(`[SessionStore] Cleaning up ${toRemove.length} old sessions beyond limit of ${this.maxSessions}`);
+			const tx = this.redis.multi();
+			for (const id of toRemove) {
+				tx.del(this.getHeaderKey(id));
+				tx.del(this.getEntriesKey(id));
+				tx.del(this.getMetaKey(id));
+			}
+			tx.zremrangebyrank(indexKey, 0, overLimit - 1);
+			await tx.exec();
+		}
 	}
 
 	async listSessions(): Promise<SessionMetadata[]> {
@@ -159,7 +195,7 @@ export class RedisSessionStore {
 
 		const result: SessionMetadata[] = [];
 		for (const id of sessionIds) {
-			const meta = await this.redis.hgetall(`user:${this.owner}:agent:session:${id}:meta`);
+			const meta = await this.redis.hgetall(this.getMetaKey(id));
 			if (meta && meta.id) {
 				result.push({
 					id: meta.id,
@@ -173,8 +209,8 @@ export class RedisSessionStore {
 	}
 
 	async getSession(previousSessionId: string): Promise<{ entries: any[] }> {
-		const headerKey = `user:${this.owner}:agent:session:${previousSessionId}:header`;
-		const entriesKey = `user:${this.owner}:agent:session:${previousSessionId}:entries`;
+		const headerKey = this.getHeaderKey(previousSessionId);
+		const entriesKey = this.getEntriesKey(previousSessionId);
 
 		const [headerStr, entriesRaw] = await Promise.all([
 			this.redis.get(headerKey),
@@ -193,11 +229,16 @@ export class RedisSessionStore {
 		const currentKey = this.getCurrentSessionKey();
 		const headerKey = this.getHeaderKey(sessionId);
 		const entriesKey = this.getEntriesKey(sessionId);
+		const metaKey = this.getMetaKey(sessionId);
+
 		const tx = this.redis.multi();
 		tx.set(currentKey, sessionId);
 		tx.del(headerKey);
 		tx.del(entriesKey);
+		tx.del(metaKey);
 		await tx.exec();
 		this.log(`[SessionStore] Reset to fresh session: ${sessionId}`);
 	}
 }
+
+
