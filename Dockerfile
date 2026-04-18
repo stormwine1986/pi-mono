@@ -70,6 +70,10 @@ WORKDIR /app
 # Copy built monorepo and set ownership
 COPY --from=builder --chown=pi-mono:pi-mono /app /app
 
+# Install cli tools from /app/cli to /usr/local/bin
+RUN chmod +x /app/cli/* && \
+    cp /app/cli/* /usr/local/bin/
+
 # Default environment variables
 ENV REDIS_URL=redis://localhost:6379
 ENV GEMINI_API_KEY=""

@@ -1,0 +1,158 @@
+#!/bin/bash
+# .pi/agent/bin/graph
+# 知识图谱 CLI —— 供 Agent 探索本体图 (Ontology Graph)
+
+MEMORY_URL="${ONTOLOGY_URL}"
+
+show_help() {
+    echo "Usage: graph <action> [options]"
+    echo ""
+    echo "Actions:"
+    echo "  nodes [options]                探索节点"
+    echo "      --template-name=<name>     (可选) 按模板过滤"
+    echo "      --nanoid=<id>              (可选) 按唯一标识查询"
+    echo "      --<prop>=<val>             (可选) 按属性过滤, e.g. --ticker=NVDA"
+    echo "      --limit=<n>                (可选) 返回条数，默认 100"
+    echo ""
+    echo "  edges [options]                探索关系边"
+    echo "      --template-name=<name>     (可选) 按模板过滤"
+    echo "      --source_id=<id>           (可选) 起点 Nanoid"
+    echo "      --target_id=<id>           (可选) 终点 Nanoid"
+    echo "      --node_id=<id>             (可选) 双向关联节点 Nanoid"
+    echo "      --<prop>=<val>             (可选) 按属性过滤"
+    echo "      --limit=<n>                (可选) 返回条数，默认 100"
+    echo ""
+    echo "  templates                      列出所有可用模板"
+    echo "  template --name=<name>         查看特定模板的属性定义 (Schema)"
+    echo ""
+    echo "  exec <cypher>                  执行原始 Cypher 查询"
+    echo ""
+    echo "  create-node --template=<name> --params='{...}'  通过模板创建节点"
+    echo "  create-edge --template=<name> --params='{...}'  通过模板创建关系边"
+}
+
+if [ -z "$1" ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+    show_help
+    exit 0
+fi
+
+case "$1" in
+  nodes)
+    shift
+    NANOID=""; LIMIT=100; TEMPLATE=""
+    EXTRA_ARGS=()
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --template-name=*) TEMPLATE="${1#*=}"; shift ;;
+        --nanoid=*)        NANOID="${1#*=}"; shift ;;
+        --limit=*)         LIMIT="${1#*=}"; shift ;;
+        --*)               EXTRA_ARGS+=("$1"); shift ;;
+        *) shift ;;
+      esac
+    done
+
+    CMD=(curl -s --noproxy "*" --max-time 15 -G "${MEMORY_URL}/graph/nodes")
+    [ -n "$TEMPLATE" ] && CMD+=(--data-urlencode "template_name=${TEMPLATE}")
+    [ -n "$NANOID" ] && CMD+=(--data-urlencode "nanoid=${NANOID}")
+    CMD+=(--data-urlencode "limit=${LIMIT}")
+
+    for arg in "${EXTRA_ARGS[@]}"; do
+        key="${arg#--}"; key="${key%%=*}"; val="${arg#*=}"
+        CMD+=(--data-urlencode "${key}=${val}")
+    done
+    "${CMD[@]}"
+    ;;
+
+  edges)
+    shift
+    SRC=""; DST=""; NID=""; LIMIT=100; TEMPLATE=""
+    EXTRA_ARGS=()
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --source_id=*)     SRC="${1#*=}"; shift ;;
+        --target_id=*)     DST="${1#*=}"; shift ;;
+        --node_id=*)       NID="${1#*=}"; shift ;;
+        --template-name=*) TEMPLATE="${1#*=}"; shift ;;
+        --limit=*)         LIMIT="${1#*=}"; shift ;;
+        --*)               EXTRA_ARGS+=("$1"); shift ;;
+        *) shift ;;
+      esac
+    done
+
+    CMD=(curl -s --noproxy "*" --max-time 15 -G "${MEMORY_URL}/graph/edges")
+    [ -n "$SRC" ] && CMD+=(--data-urlencode "source_id=${SRC}")
+    [ -n "$DST" ] && CMD+=(--data-urlencode "target_id=${DST}")
+    [ -n "$NID" ] && CMD+=(--data-urlencode "node_id=${NID}")
+    [ -n "$TEMPLATE" ] && CMD+=(--data-urlencode "template_name=${TEMPLATE}")
+    CMD+=(--data-urlencode "limit=${LIMIT}")
+
+    for arg in "${EXTRA_ARGS[@]}"; do
+        key="${arg#--}"; key="${key%%=*}"; val="${arg#*=}"
+        CMD+=(--data-urlencode "${key}=${val}")
+    done
+    "${CMD[@]}"
+    ;;
+
+  templates)
+    curl -s --noproxy "*" --max-time 15 "${MEMORY_URL}/graph/templates"
+    ;;
+  
+  template)
+    shift
+    NAME=""
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --name=*) NAME="${1#*=}"; shift ;;
+        *) shift ;;
+      esac
+    done
+    if [ -z "$NAME" ]; then echo "Error: --name is required"; exit 1; fi
+    curl -s --noproxy "*" --max-time 15 "${MEMORY_URL}/graph/templates/${NAME}"
+    ;;
+
+  exec)
+    shift
+    QUERY="$*"
+    if [ -z "$QUERY" ]; then echo "Error: Cypher query required"; exit 1; fi
+    curl -s --noproxy "*" --max-time 30 -X POST "${MEMORY_URL}/graph/exec" \
+      -H "Content-Type: application/json" \
+      -d "{\"query\": \"${QUERY}\"}"
+    ;;
+
+  create-node)
+    shift
+    TEMPLATE=""; PARAMS="{}"
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --template=*) TEMPLATE="${1#*=}"; shift ;;
+        --params=*)   PARAMS="${1#*=}"; shift ;;
+        *) shift ;;
+      esac
+    done
+    if [ -z "$TEMPLATE" ]; then echo "Error: --template is required"; exit 1; fi
+    curl -s --noproxy "*" --max-time 15 -X POST "${MEMORY_URL}/graph/nodes" \
+      -H "Content-Type: application/json" \
+      -d "{\"template_name\": \"${TEMPLATE}\", \"params\": ${PARAMS}}"
+    ;;
+
+  create-edge)
+    shift
+    TEMPLATE=""; PARAMS="{}"
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --template=*) TEMPLATE="${1#*=}"; shift ;;
+        --params=*)   PARAMS="${1#*=}"; shift ;;
+        *) shift ;;
+      esac
+    done
+    if [ -z "$TEMPLATE" ]; then echo "Error: --template is required"; exit 1; fi
+    curl -s --noproxy "*" --max-time 15 -X POST "${MEMORY_URL}/graph/edges" \
+      -H "Content-Type: application/json" \
+      -d "{\"template_name\": \"${TEMPLATE}\", \"params\": ${PARAMS}}"
+    ;;
+
+  *)
+    show_help
+    exit 1
+    ;;
+esac

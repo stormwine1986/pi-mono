@@ -1,0 +1,79 @@
+#!/bin/bash
+
+BASE_URL="${ONTOLOGY_URL}/reminder"
+
+function show_help() {
+    cat << EOF
+Usage: reminder list
+       reminder remove <id>
+       reminder add --id <id> --date_at <YYYY-MM-DD HH:mm:ss> --message <message>
+
+Examples:
+  reminder list
+  reminder add --id drink-water --date_at "2026-04-14 11:00:00" --message "Time to drink water"
+EOF
+}
+
+if [[ "$1" == "-h" || "$1" == "--help" || -z "$1" ]]; then
+    show_help
+    exit 0
+fi
+
+# Detect if jq is available
+USE_JQ=false
+if command -v jq >/dev/null 2>&1; then
+    USE_JQ=true
+fi
+
+function format_json() {
+    if [ "$USE_JQ" = true ]; then
+        jq .
+    else
+        python3 -m json.tool
+    fi
+}
+
+COMMAND=$1
+shift
+
+case $COMMAND in
+    list)
+        curl -s -X GET "$BASE_URL" | format_json
+        ;;
+    remove)
+        ID=$1
+        if [[ -z "$ID" ]]; then echo "Error: ID is required"; exit 1; fi
+        curl -s -X DELETE "$BASE_URL/$ID" | format_json
+        ;;
+    add)
+        ID=""
+        DATE_AT=""
+        MSG=""
+        while [[ $# -gt 0 ]]; do
+            case $1 in
+                --id) ID="$2"; shift 2 ;;
+                --date_at) DATE_AT="$2"; shift 2 ;;
+                --message) MSG="$2"; shift 2 ;;
+                *) shift ;;
+            esac
+        done
+        if [[ -z "$ID" || -z "$DATE_AT" || -z "$MSG" ]]; then
+            echo "Error: --id, --date_at and --message are required"
+            exit 1
+        fi
+        
+        if [ "$USE_JQ" = true ]; then
+            JSON_DATA=$(jq -n --arg id "$ID" --arg dt "$DATE_AT" --arg msg "$MSG" \
+                '{id: $id, date_at: $dt, message: $msg}')
+        else
+            JSON_DATA="{\"id\":\"$ID\", \"date_at\":\"$DATE_AT\", \"message\":\"$MSG\"}"
+        fi
+        
+        curl -s -X POST "$BASE_URL" -H "Content-Type: application/json" -d "$JSON_DATA" | format_json
+        ;;
+    *)
+        echo "Unknown command: $COMMAND"
+        show_help
+        exit 1
+        ;;
+esac

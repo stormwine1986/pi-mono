@@ -1,0 +1,64 @@
+#!/usr/bin/env node
+
+/**
+ * media: Send media (images) to Telegram via Gateway
+ * Usage: media image send <path>
+ */
+
+const Redis = require('/app/node_modules/ioredis');
+const redisUrl = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
+const redis = new Redis(redisUrl);
+
+const id = process.env.PI_TASK_ID;
+const args = process.argv.slice(2);
+
+function showHelp() {
+    console.log('media: Media management tool');
+    console.log('\nUsage:');
+    console.log('  media image send <path>');
+    console.log('\nOptions:');
+    console.log('  -h, --help     Show this help message');
+    process.exit(0);
+}
+
+if (args.includes('-h') || args.includes('--help')) {
+    showHelp();
+}
+
+// Expected structure: media image send <path>
+if (args[0] === 'image' && args[1] === 'send') {
+    const path = args[2];
+
+    if (!path) {
+        console.error('Error: Path is required');
+        console.log('Usage: media image send <path>');
+        process.exit(1);
+    }
+
+    const payload = {
+        id,
+        status: 'progress',
+        event: 'send_media',
+        data: {
+            path,
+            type: 'image'
+        }
+    };
+
+    async function main() {
+        try {
+            await redis.xadd('agent_out', '*', 'payload', JSON.stringify(payload));
+            console.log(`Successfully queued image to send: ${path}`);
+            process.exit(0);
+        } catch (err) {
+            console.error('Error sending media message:', err);
+            process.exit(1);
+        }
+    }
+
+    main();
+} else {
+    console.error('Error: Unknown command structure');
+    showHelp();
+    process.exit(1);
+}

@@ -1,0 +1,90 @@
+#!/bin/bash
+
+BASE_URL="${ONTOLOGY_URL}/scheduler"
+
+function show_help() {
+    cat << EOF
+Usage: scheduler <id>
+       scheduler list
+       scheduler log <id>
+       scheduler remove <id>
+       scheduler add --id <id> --display-name <name> --schedule <expr> [--tz <timezone>] --command <cmd>
+
+Examples:
+  scheduler list
+  scheduler test-job
+  scheduler add --id my-job --display-name "My Test Job" --schedule "@every 1m" --command "echo hello"
+EOF
+}
+
+if [[ "$1" == "-h" || "$1" == "--help" || -z "$1" ]]; then
+    show_help
+    exit 0
+fi
+
+# Detect if jq is available
+USE_JQ=false
+if command -v jq >/dev/null 2>&1; then
+    USE_JQ=true
+fi
+
+function format_json() {
+    if [ "$USE_JQ" = true ]; then
+        jq .
+    else
+        python3 -m json.tool
+    fi
+}
+
+COMMAND=$1
+shift
+
+case $COMMAND in
+    list)
+        curl -s -X GET "$BASE_URL" | format_json
+        ;;
+    log)
+        ID=$1
+        if [[ -z "$ID" ]]; then echo "Error: ID is required"; exit 1; fi
+        curl -s -X GET "$BASE_URL/$ID/log"
+        ;;
+    remove)
+        ID=$1
+        if [[ -z "$ID" ]]; then echo "Error: ID is required"; exit 1; fi
+        curl -s -X DELETE "$BASE_URL/$ID" | format_json
+        ;;
+    add)
+        ID=""
+        DISPLAY_NAME=""
+        SCHEDULE=""
+        TZ="UTC"
+        CMD=""
+        while [[ $# -gt 0 ]]; do
+            case $1 in
+                --id) ID="$2"; shift 2 ;;
+                --display-name) DISPLAY_NAME="$2"; shift 2 ;;
+                --schedule) SCHEDULE="$2"; shift 2 ;;
+                --tz) TZ="$2"; shift 2 ;;
+                --command) CMD="$2"; shift 2 ;;
+                *) shift ;;
+            esac
+        done
+        if [[ -z "$ID" || -z "$SCHEDULE" || -z "$CMD" ]]; then
+            echo "Error: --id, --schedule and --command are required"
+            exit 1
+        fi
+        
+        if [ "$USE_JQ" = true ]; then
+            JSON_DATA=$(jq -n --arg id "$ID" --arg dn "$DISPLAY_NAME" --arg sc "$SCHEDULE" --arg tz "$TZ" --arg cmd "$CMD" \
+                '{id: $id, display_name: $dn, schedule: $sc, timezone: $tz, command: $cmd}')
+        else
+            JSON_DATA="{\"id\":\"$ID\", \"display_name\":\"$DISPLAY_NAME\", \"schedule\":\"$SCHEDULE\", \"timezone\":\"$TZ\", \"command\":\"$CMD\"}"
+        fi
+        
+        curl -s -X POST "$BASE_URL" -H "Content-Type: application/json" -d "$JSON_DATA" | format_json
+        ;;
+    *)
+        # Default assume it's an ID
+        curl -s -X GET "$BASE_URL/$COMMAND" | format_json
+        ;;
+esac
