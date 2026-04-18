@@ -44,14 +44,9 @@ RUN apt-get update && apt-get install -y \
     git \
     curl \
     jq \
-    sqlite3 \
-    rclone \
     ca-certificates \
-    gnupg \
-    lsb-release \
-    && curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg \
-    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list \
-    && apt-get update && apt-get install -y docker-ce-cli \
+    && curl -sLf "https://github.com/rest-sh/restish/releases/download/v0.21.2/restish-0.21.2-linux-amd64.tar.gz" | tar -xz -C /usr/local/bin restish \
+    && npm install -g mcporter \
     && rm -rf /var/lib/apt/lists/*
 
 # Create pi-mono user and group (handle case where 1000 already exists)
@@ -68,9 +63,7 @@ RUN if ! getent group pi-mono >/dev/null; then \
         else \
             useradd -u 1000 -g pi-mono -m -s /bin/bash pi-mono; \
         fi; \
-    fi && \
-    groupadd -g 999 docker_host && \
-    usermod -aG docker_host pi-mono
+    fi
 
 WORKDIR /app
 
