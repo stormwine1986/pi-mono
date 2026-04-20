@@ -85,7 +85,6 @@ ENV PATH="/home/pi-mono/.pi/agent/bin:/app/node_modules/.bin:${PATH}"
 RUN mkdir -p /home/pi-mono/.pi/agent/workspace && \
     chown -R pi-mono:pi-mono /home/pi-mono/.pi
 
-VOLUME ["/home/pi-mono/.pi"]
 
 USER pi-mono
 
