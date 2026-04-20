@@ -81,8 +81,9 @@ ENV PI-STATE-DIR=/home/pi-mono/.pi
 ENV PI-WORKSPACE-DIR=/home/pi-mono/.pi/agent/workspace
 ENV PATH="/home/pi-mono/.pi/agent/bin:/app/node_modules/.bin:${PATH}"
 
-# Create the expected workspace directory for the worker using pi-mono user
+# Copy default settings and models to the agent directory
 RUN mkdir -p /home/pi-mono/.pi/agent/workspace && \
+    cp /app/packages/settings/* /home/pi-mono/.pi/agent/ && \
     chown -R pi-mono:pi-mono /home/pi-mono/.pi
 
 
