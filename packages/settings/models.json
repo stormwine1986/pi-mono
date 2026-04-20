@@ -1,0 +1,21 @@
+{
+  "providers": {
+    "litellm": {
+      "baseUrl": "http://litellm:4000/v1",
+      "api": "openai-completions",
+      "apiKey": "LLM_API_KEY",
+      "models": [
+        {
+          "id": "qwen3.5-27b",
+          "name": "Qwen3.5 27B",
+          "reasoning": true,
+          "input": [
+            "text"
+          ],
+          "contextWindow": 196608,
+          "maxTokens": 8192
+        }
+      ]
+    }
+  }
+}

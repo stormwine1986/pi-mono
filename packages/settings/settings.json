@@ -1,0 +1,5 @@
+{
+  "defaultProvider": "litellm",
+  "defaultModel": "qwen3.5-27b",
+  "defaultThinkingLevel": "low"
+}
