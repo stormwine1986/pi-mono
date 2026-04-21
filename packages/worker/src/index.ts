@@ -71,9 +71,9 @@ async function main() {
 			const payloadRaw = fields[fields.indexOf("payload") + 1];
 			const payload = JSON.parse(payloadRaw) as WorkerTask;
 
-			const { id, user_id, source, prompt, session_id, images: imagePaths } = payload;
+			const { task_id, user_id, source, prompt, session_id, images: imagePaths } = payload;
 			const taskSource = source || "web";
-			currentTaskId = id;
+			currentTaskId = task_id;
 
 			if (!prompt) {
 				await redis.xack(inputQueue, consumerGroup, messageId);
@@ -156,7 +156,7 @@ async function main() {
 				}
 
 				const progress = {
-					task_id: id,
+					task_id: currentTaskId,
 					user_id,
 					source: taskSource,
 					agent_id: agentId,
@@ -172,7 +172,7 @@ async function main() {
 				await session.prompt(prompt, imageContents.length > 0 ? { images: imageContents } : undefined);
 
 				const resultPayload: WorkerResponse = {
-					id,
+					task_id: currentTaskId,
 					user_id,
 					source: taskSource,
 					agent_id: agentId,
@@ -191,7 +191,7 @@ async function main() {
 				);
 			} catch (err: any) {
 				const errorPayload: WorkerResponse = {
-					id,
+					task_id: currentTaskId,
 					user_id,
 					source: taskSource,
 					agent_id: agentId,

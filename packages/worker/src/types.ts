@@ -1,5 +1,5 @@
 export interface WorkerTask {
-	id?: string;
+	task_id?: string;
 	user_id?: string;
 	source?: string;
 	prompt?: string;
@@ -9,7 +9,7 @@ export interface WorkerTask {
 }
 
 export type WorkerResponse = {
-	id?: string;
+	task_id?: string;
 	user_id?: string;
 	source?: string;
 	agent_id?: string;
@@ -34,7 +34,7 @@ export type WorkerResponse = {
 );
 
 export interface WorkerControlSignal {
-	id?: string;
+	task_id?: string;
 	user_id?: string;
 	source?: string;
 	command: "stop" | "steer" | "reset";
