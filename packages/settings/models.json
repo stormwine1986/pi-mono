@@ -24,6 +24,16 @@
           ],
           "contextWindow": 196608,
           "maxTokens": 8192
+        },
+        {
+          "id": "astron-code-latest",
+          "name": "astron-code-latest",
+          "reasoning": true,
+          "input": [
+            "text"
+          ],
+          "contextWindow": 196608,
+          "maxTokens": 8192
         }
       ]
     }

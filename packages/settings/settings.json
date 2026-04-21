@@ -1,5 +1,5 @@
 {
   "defaultProvider": "litellm",
-  "defaultModel": "qwen3.5-27b",
+  "defaultModel": "astron-code-latest",
   "defaultThinkingLevel": "low"
 }
