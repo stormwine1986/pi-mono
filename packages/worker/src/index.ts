@@ -149,7 +149,8 @@ async function main() {
 					agent_id: agentId,
 					session_id: currentSessionId,
 					status: "progress",
-					...event
+					event: event.type,
+					data: event
 				};
 				await redisPublisher.xadd(outputQueue, "MAXLEN", "~", 1000, "*", "payload", JSON.stringify(progress));
 			});
