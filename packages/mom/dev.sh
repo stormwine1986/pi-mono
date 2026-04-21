@@ -9,20 +9,20 @@ mkdir -p "$DATA_DIR"
 
 # Check if container exists
 if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
-    # Check if it's running
-    if ! docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
-        echo "Starting existing container: $CONTAINER_NAME"
-        docker start "$CONTAINER_NAME"
-    else
-        echo "Container $CONTAINER_NAME already running"
-    fi
+  # Check if it's running
+  if ! docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
+    echo "Starting existing container: $CONTAINER_NAME"
+    docker start "$CONTAINER_NAME"
+  else
+    echo "Container $CONTAINER_NAME already running"
+  fi
 else
-    echo "Creating container: $CONTAINER_NAME"
-    docker run -d \
-        --name "$CONTAINER_NAME" \
-        -v "$DATA_DIR:/workspace" \
-        alpine:latest \
-        tail -f /dev/null
+  echo "Creating container: $CONTAINER_NAME"
+  docker run -d \
+    --name "$CONTAINER_NAME" \
+    -v "$DATA_DIR:/workspace" \
+    alpine:latest \
+    tail -f /dev/null
 fi
 
 # Run mom with tsx watch mode

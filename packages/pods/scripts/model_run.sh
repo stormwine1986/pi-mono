@@ -10,11 +10,11 @@ VLLM_ARGS="{{VLLM_ARGS}}"
 
 # Trap to ensure cleanup on exit and kill any child processes
 cleanup() {
-    local exit_code=$?
-    echo "Model runner exiting with code $exit_code"
-    # Kill any child processes
-    pkill -P $$ 2>/dev/null || true
-    exit $exit_code
+  local exit_code=$?
+  echo "Model runner exiting with code $exit_code"
+  # Kill any child processes
+  pkill -P $$ 2>/dev/null || true
+  exit $exit_code
 }
 trap cleanup EXIT TERM INT
 
@@ -33,7 +33,7 @@ echo "Model Run: $NAME"
 echo "Model ID: $MODEL_ID"
 echo "Port: $PORT"
 if [ -n "$VLLM_ARGS" ]; then
-    echo "vLLM Args: $VLLM_ARGS"
+  echo "vLLM Args: $VLLM_ARGS"
 fi
 echo "========================================="
 echo ""
@@ -43,8 +43,8 @@ echo "Downloading model (will skip if cached)..."
 HF_HUB_ENABLE_HF_TRANSFER=1 hf download "$MODEL_ID"
 
 if [ $? -ne 0 ]; then
-    echo "❌ ERROR: Failed to download model" >&2
-    exit 1
+  echo "❌ ERROR: Failed to download model" >&2
+  exit 1
 fi
 
 echo ""
@@ -54,7 +54,7 @@ echo ""
 # Build vLLM command
 VLLM_CMD="vllm serve '$MODEL_ID' --port $PORT --api-key '$PI_API_KEY'"
 if [ -n "$VLLM_ARGS" ]; then
-    VLLM_CMD="$VLLM_CMD $VLLM_ARGS"
+  VLLM_CMD="$VLLM_CMD $VLLM_ARGS"
 fi
 
 echo "Starting vLLM server..."
@@ -73,10 +73,10 @@ wait $VLLM_PID
 VLLM_EXIT_CODE=$?
 
 if [ $VLLM_EXIT_CODE -ne 0 ]; then
-    echo "❌ ERROR: vLLM exited with code $VLLM_EXIT_CODE" >&2
-    # Make sure to exit the script command too
-    kill -TERM $$ 2>/dev/null || true
-    exit $VLLM_EXIT_CODE
+  echo "❌ ERROR: vLLM exited with code $VLLM_EXIT_CODE" >&2
+  # Make sure to exit the script command too
+  kill -TERM $$ 2>/dev/null || true
+  exit $VLLM_EXIT_CODE
 fi
 
 echo "✅ vLLM exited normally"
