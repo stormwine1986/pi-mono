@@ -5,6 +5,7 @@ type Logger = (message: string, ...args: unknown[]) => void;
 
 interface RedisSessionStoreOptions {
 	owner: string;
+	namespace?: string; // e.g., 'agent' or 'acp'
 	maxEntries: number; // Entries per session
 	maxSessions: number; // Max number of sessions to keep
 	log: Logger;
@@ -21,6 +22,7 @@ interface SessionMetadata {
 	title: string;
 	lastModified: string;
 	messageCount: number;
+	source?: string; // e.g., 'acp'
 }
 
 function parsePositiveInt(name: string, value: string | undefined, defaultValue?: number): number {
@@ -48,6 +50,7 @@ export class RedisSessionStore {
 	private readonly maxEntries: number;
 	private readonly maxSessions: number;
 	private readonly log: Logger;
+	private readonly namespace: string;
 
 	constructor(
 		private readonly redis: Redis,
@@ -57,6 +60,7 @@ export class RedisSessionStore {
 		this.maxEntries = opts.maxEntries;
 		this.maxSessions = opts.maxSessions;
 		this.log = opts.log;
+		this.namespace = opts.namespace || "agent"; // Typically 'agent'
 	}
 
 	static fromEnv(redis: Redis, owner: string, log: Logger): RedisSessionStore {
@@ -65,75 +69,30 @@ export class RedisSessionStore {
 		return new RedisSessionStore(redis, { owner, maxEntries, maxSessions, log });
 	}
 
-	private getCurrentSessionKey(): string {
-		return `user:${this.owner}:agent:session:current_id`;
-	}
 
 	private getSessionIndexKey(): string {
-		return `user:${this.owner}:agent:sessions`;
+		return `user:${this.owner}:${this.namespace}:sessions`;
 	}
 
 	private getHeaderKey(sessionId: string): string {
-		return `user:${this.owner}:agent:session:${sessionId}:header`;
+		return `user:${this.owner}:${this.namespace}:session:${sessionId}:header`;
 	}
 
 	private getEntriesKey(sessionId: string): string {
-		return `user:${this.owner}:agent:session:${sessionId}:entries`;
+		return `user:${this.owner}:${this.namespace}:session:${sessionId}:entries`;
 	}
 
 	private getMetaKey(sessionId: string): string {
-		return `user:${this.owner}:agent:session:${sessionId}:meta`;
+		return `user:${this.owner}:${this.namespace}:session:${sessionId}:meta`;
 	}
 
-	async restoreAndBind(runtimeSessionId: string): Promise<SessionLoadResult> {
-		const currentKey = this.getCurrentSessionKey();
-		const previousSessionId = await this.redis.get(currentKey);
 
-		if (!previousSessionId) {
-			await this.redis.set(currentKey, runtimeSessionId);
-			this.log(`[SessionStore] Initialized current session: ${runtimeSessionId}`);
-			return { entries: [] };
-		}
-
-		const previousEntriesKey = this.getEntriesKey(previousSessionId);
-		const previousHeaderKey = this.getHeaderKey(previousSessionId);
-
-		const [rawHeader, rawEntries] = await Promise.all([
-			this.redis.get(previousHeaderKey),
-			this.redis.lrange(previousEntriesKey, 0, -1),
-		]);
-
-		const header = rawHeader ? safeParse<SessionHeader>(rawHeader) : undefined;
-		const entries = rawEntries.map(safeParse<SessionEntry>).filter((m): m is SessionEntry => m !== null);
-
-		if (previousSessionId !== runtimeSessionId) {
-			const runtimeEntriesKey = this.getEntriesKey(runtimeSessionId);
-			const runtimeHeaderKey = this.getHeaderKey(runtimeSessionId);
-
-			const exists = await this.redis.exists(previousEntriesKey);
-			if (exists) {
-				await this.redis.del(runtimeEntriesKey);
-				await this.redis.rename(previousEntriesKey, runtimeEntriesKey);
-			}
-
-			if (header) {
-				await this.redis.set(runtimeHeaderKey, JSON.stringify({ ...header, id: runtimeSessionId }));
-				await this.redis.del(previousHeaderKey);
-			}
-
-			await this.redis.set(currentKey, runtimeSessionId);
-			this.log(`[SessionStore] Rebound session ${previousSessionId} -> ${runtimeSessionId}`);
-		}
-
-		return {
-			previousSessionId,
-			header: header ? (header as SessionHeader) : undefined,
-			entries,
-		};
-	}
-
-	async persistSnapshot(sessionId: string, header: SessionHeader, entries: SessionEntry[]): Promise<void> {
-		const currentKey = this.getCurrentSessionKey();
+	async persistSnapshot(
+		sessionId: string,
+		header: SessionHeader,
+		entries: SessionEntry[],
+		extraMeta?: Partial<SessionMetadata>,
+	): Promise<void> {
 		const indexKey = this.getSessionIndexKey();
 		const headerKey = this.getHeaderKey(sessionId);
 		const entriesKey = this.getEntriesKey(sessionId);
@@ -148,12 +107,12 @@ export class RedisSessionStore {
 			title: header.cwd || "New Session",
 			lastModified,
 			messageCount: entries.filter((e) => e.type === "message").length,
+			...extraMeta, // Override with extra metadata
 		};
 
 		const now = Date.now();
 
 		const tx = this.redis.multi();
-		tx.set(currentKey, sessionId);
 		tx.set(headerKey, JSON.stringify(header));
 		tx.del(entriesKey);
 		if (toPersist.length > 0) {
@@ -228,18 +187,4 @@ export class RedisSessionStore {
 		return { entries };
 	}
 
-	async resetToSession(sessionId: string): Promise<void> {
-		const currentKey = this.getCurrentSessionKey();
-		const headerKey = this.getHeaderKey(sessionId);
-		const entriesKey = this.getEntriesKey(sessionId);
-		const metaKey = this.getMetaKey(sessionId);
-
-		const tx = this.redis.multi();
-		tx.set(currentKey, sessionId);
-		tx.del(headerKey);
-		tx.del(entriesKey);
-		tx.del(metaKey);
-		await tx.exec();
-		this.log(`[SessionStore] Reset to fresh session: ${sessionId}`);
-	}
 }

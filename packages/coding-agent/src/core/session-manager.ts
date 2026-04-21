@@ -37,6 +37,7 @@ export interface SessionHeader {
 
 export interface NewSessionOptions {
 	parentSession?: string;
+	id?: string;
 }
 
 export interface SessionEntryBase {
@@ -721,7 +722,7 @@ export class SessionManager {
 	}
 
 	newSession(options?: NewSessionOptions): string | undefined {
-		this.sessionId = randomUUID();
+		this.sessionId = options?.id ?? randomUUID();
 		const timestamp = new Date().toISOString();
 		const header: SessionHeader = {
 			type: "session",
@@ -1298,8 +1299,12 @@ export class SessionManager {
 	}
 
 	/** Create an in-memory session (no file persistence) */
-	static inMemory(cwd: string = process.cwd()): SessionManager {
-		return new SessionManager(cwd, "", undefined, false);
+	static inMemory(cwd: string = process.cwd(), sessionId?: string): SessionManager {
+		const sm = new SessionManager(cwd, "", undefined, false);
+		if (sessionId) {
+			sm.newSession({ id: sessionId });
+		}
+		return sm;
 	}
 
 	/**

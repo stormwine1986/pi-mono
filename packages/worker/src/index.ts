@@ -1,9 +1,11 @@
 import { readFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import { homedir } from "node:os";
 import { extname, join } from "node:path";
 import {
 	AuthStorage,
 	createAgentSession,
+	DefaultResourceLoader,
 	ModelRegistry,
 	SessionManager,
 	SettingsManager,
@@ -15,7 +17,6 @@ import { RedisSessionStore } from "./session-store.js";
 import type { WorkerControlSignal, WorkerResponse, WorkerTask } from "./types.js";
 
 async function main() {
-	// Configuration directories from environment or defaults
 	const stateDir = process.env["PI-STATE-DIR"] || join(homedir(), ".pi");
 	const agentDir = join(stateDir, "agent");
 	const workspaceDir = process.env["PI-WORKSPACE-DIR"] || join(agentDir, "workspace");
@@ -24,46 +25,14 @@ async function main() {
 	log(`State directory: ${stateDir}`);
 	log(`Workspace directory: ${workspaceDir}`);
 
-	// Keep session runtime in memory; persistence is handled by RedisSessionStore.
-	const sessionManager = SessionManager.inMemory(workspaceDir);
-
-	log(`Connecting to Redis at ${redisUrl}...`);
 	const redis = new Redis(redisUrl);
 	const redisPublisher = new Redis(redisUrl);
 	const redisSubscriber = new Redis(redisUrl);
 	const redisSessionStore = RedisSessionStore.fromEnv(redisPublisher, owner, log);
 
-	// Restore session from Redis if it exists
-	const restored = await redisSessionStore.restoreAndBind(sessionManager.getSessionId());
-	if (restored.header || restored.entries.length > 0) {
-		const allEntries = restored.header ? [restored.header, ...restored.entries] : restored.entries;
-		sessionManager.loadEntries(allEntries as any);
-		log(`[SessionStore] Restored session ${sessionManager.getSessionId()} with ${allEntries.length} entries.`);
-	}
-
-	// Load settings to get default model and thinking level
 	const settingsManager = SettingsManager.create(workspaceDir, agentDir);
-	const defaultProvider = settingsManager.getDefaultProvider();
-	const defaultModelId = settingsManager.getDefaultModel();
-	const defaultThinkingLevel = settingsManager.getDefaultThinkingLevel();
-
-	// Resolve model registry to find the actual model object
 	const authStorage = AuthStorage.create(join(agentDir, "auth.json"));
 	const modelRegistry = new ModelRegistry(authStorage, join(agentDir, "models.json"));
-	const model = defaultProvider && defaultModelId ? modelRegistry.find(defaultProvider, defaultModelId) : undefined;
-
-	// Initialize agent session (loads settings, auth, tools, and system prompt)
-	const { session } = await createAgentSession({
-		cwd: workspaceDir,
-		agentDir: agentDir,
-		sessionManager: sessionManager,
-		settingsManager: settingsManager,
-		modelRegistry: modelRegistry,
-		authStorage: authStorage,
-		model: model,
-		thinkingLevel: defaultThinkingLevel,
-	});
-	const agent = session.agent;
 
 	// Ensure consumer group exists
 	try {
@@ -75,281 +44,162 @@ async function main() {
 		}
 	}
 
-	// Keep track of current task ID for filtering control signals
 	let currentTaskId: string | undefined;
+	let currentAgent: any = null;
 
-	log(`Subscribing to shared control channel: ${controlChannel}`);
 	redisSubscriber.on("message", async (channel, rawSignal) => {
-		log(`[Control] Received message on channel ${channel}: ${rawSignal}`);
 		try {
 			const signal: WorkerControlSignal = JSON.parse(rawSignal);
-			if (signal.command === "stop") {
-				log(`[Interrupt] Received stop for current task (${currentTaskId || "none"})`);
-				agent.abort();
-			} else if (signal.command === "steer" && signal.message) {
-				log(`[Steer] Received steer for current task (${currentTaskId || "none"}): ${signal.message}`);
-				await session.steer(signal.message);
-			} else if (signal.command === "reset") {
-				log(`[Reset] Received reset command for current session`);
-				await session.newSession();
-				await redisSessionStore.resetToSession(session.sessionId);
-
-				const taskId = signal.id;
-				const modelInfo = `${agent.state.model?.provider}:${agent.state.model?.id} (思维层级: ${agent.state.thinkingLevel})`;
-				const payload = {
-					id: taskId,
-					user_id: signal.user_id || "internal",
-					source: signal.source || "internal",
-					prompt: `新会话已经开启。\n当前模型设定：${modelInfo}。\n会话所属用户ID：${signal.user_id}。\n\n向用户发出问候，并在问候中包含模型设定信息。`,
-				};
-				await (redisPublisher as any).xadd(
-					inputQueue,
-					"MAXLEN",
-					"~",
-					1000,
-					"*",
-					"payload",
-					JSON.stringify(payload),
-				);
-				log(`[Reset] Pushed new session greeting to ${inputQueue}`);
+			if (signal.command === "stop" && currentAgent) {
+				currentAgent.abort();
 			}
-		} catch (e: any) {
-			error(`[Control] Failed to process control signal: ${e.message}. Raw: ${rawSignal}`);
-		}
+		} catch (e) {}
 	});
-
 	await redisSubscriber.subscribe(controlChannel);
-	log(`Successfully subscribed to ${controlChannel}`);
-
-	log(`Listening for messages on queue: ${inputQueue}`);
-	log(`Using model: ${agent.state.model?.provider}:${agent.state.model?.id} (Thinking: ${agent.state.thinkingLevel})`);
 
 	while (true) {
 		try {
-			// XREADGROUP returns [ [streamName, [ [id, [field, value, ...]], ... ]], ... ]
 			const result = await redis.xreadgroup(
-				"GROUP",
-				consumerGroup,
-				consumerName,
-				"COUNT",
-				1,
-				"BLOCK",
-				0,
-				"STREAMS",
-				inputQueue,
-				">",
+				"GROUP", consumerGroup, consumerName,
+				"COUNT", 1, "BLOCK", 0, "STREAMS", inputQueue, ">"
 			);
 
 			if (!result || (result as any).length === 0) continue;
 
 			const [_, messages] = (result as any)[0];
-			if (!messages || messages.length === 0) continue;
-
 			const [messageId, fields] = messages[0];
-			// The payload is in the 'payload' field
-			let rawMessage = "";
-			for (let i = 0; i < fields.length; i += 2) {
-				if (fields[i] === "payload") {
-					rawMessage = fields[i + 1];
-					break;
-				}
-			}
+			const payloadRaw = fields[fields.indexOf("payload") + 1];
+			const payload = JSON.parse(payloadRaw) as WorkerTask;
 
-			if (!rawMessage) {
-				log(`Received message ${messageId} with no payload fields`);
+			const { id, user_id, source, prompt, session_id, images: imagePaths } = payload;
+			const taskSource = source || "web";
+			currentTaskId = id;
+
+			if (!prompt) {
 				await redis.xack(inputQueue, consumerGroup, messageId);
 				continue;
 			}
 
-			log(`Received message ${messageId}: ${rawMessage}`);
+			// Context-aware resource loader
+			const resourceLoader = new DefaultResourceLoader({
+				cwd: workspaceDir,
+				agentDir: agentDir,
+				settingsManager: settingsManager,
+				agentsFilesOverride: (base) => ({
+					agentsFiles: taskSource === "acp"
+						? base.agentsFiles.filter(f => !f.path.endsWith("MEMORY.md"))
+						: base.agentsFiles
+				})
+			});
 
-			let payload: WorkerTask;
-			try {
-				payload = JSON.parse(rawMessage);
-			} catch (_e) {
-				error("Failed to parse message as JSON:", rawMessage);
-				continue;
+			const currentSessionId = session_id || randomUUID();
+			const sessionManager = SessionManager.inMemory(workspaceDir, currentSessionId);
+			
+			// Load session only if session_id was explicitly provided (Standard ACP isolation)
+			if (session_id) {
+				const restored = await redisSessionStore.getSession(currentSessionId);
+				if (restored.entries.length > 0) {
+					sessionManager.loadEntries(restored.entries as any);
+				}
 			}
 
-			const { id, user_id, source, prompt, images: imagePaths } = payload;
-			currentTaskId = id;
+			const defaultProvider = settingsManager.getDefaultProvider();
+			const defaultModelId = settingsManager.getDefaultModel();
+			const model = defaultProvider && defaultModelId ? modelRegistry.find(defaultProvider, defaultModelId) : undefined;
 
-			if (!prompt) {
-				error("Message missing prompt:", payload);
-				currentTaskId = undefined;
-				continue;
-			}
+			const { session } = await createAgentSession({
+				cwd: workspaceDir,
+				agentDir: agentDir,
+				sessionManager: sessionManager,
+				settingsManager: settingsManager,
+				modelRegistry: modelRegistry,
+				authStorage: authStorage,
+				model: model,
+				thinkingLevel: settingsManager.getDefaultThinkingLevel(),
+			});
+			
+			const agent = session.agent;
+			currentAgent = agent;
 
-			log(`Processing task ${id || ""}: ${prompt}`);
-			process.env["PI_TASK_ID"] = id;
-
-			// Build ImageContent[] from image paths if present
-			const imageContents: Array<{ type: "image"; data: string; mimeType: string }> = [];
-			if (imagePaths && imagePaths.length > 0) {
+			// Process images
+			const imageContents: any[] = [];
+			if (imagePaths) {
 				for (const relPath of imagePaths) {
 					try {
-						const fullPath = join(workspaceDir, relPath);
-						const buffer = await readFile(fullPath);
+						const buffer = await readFile(join(workspaceDir, relPath));
 						const ext = extname(relPath).toLowerCase();
-						const mimeMap: Record<string, string> = {
-							".jpg": "image/jpeg",
-							".jpeg": "image/jpeg",
-							".png": "image/png",
-							".gif": "image/gif",
-							".webp": "image/webp",
-						};
-						const mimeType = mimeMap[ext] || "image/jpeg";
-						imageContents.push({
-							type: "image",
-							data: buffer.toString("base64"),
-							mimeType,
-						});
-						log(`Loaded image: ${relPath} (${buffer.length} bytes, ${mimeType})`);
-					} catch (imgErr) {
-						error(`Failed to load image ${relPath}:`, imgErr);
-					}
+						const mime = ext === ".png" ? "image/png" : "image/jpeg";
+						imageContents.push({ type: "image", data: buffer.toString("base64"), mimeType: mime });
+					} catch (e) {}
 				}
 			}
 
-			// Subscribe to session events to collect the response and emit progress
 			let responseText = "";
-			const toolArgsMap = new Map<string, any>();
 			const unsubscribe = session.subscribe(async (event: any) => {
-				log(`[Session Event] Type: ${event.type}`);
-				// Collect response text
 				if (event.type === "message_end" && event.message.role === "assistant") {
 					for (const block of event.message.content) {
-						if (block.type === "text") {
-							responseText += block.text;
-						}
+						if (block.type === "text") responseText += block.text;
 					}
-					log(`[Worker] Collected text from message_end: ${responseText.length} chars accumulated`);
 				}
 
-				// Emit progress events
-				const progress: any = {
-					id,
+				const progress = {
+					task_id: id,
 					user_id,
-					source,
+					source: taskSource,
 					agent_id: agentId,
-					session_id: session.sessionId,
+					session_id: currentSessionId,
 					status: "progress",
-					event: event.type,
+					...event
 				};
-
-				switch (event.type) {
-					case "message_start":
-						if (event.message?.role === "assistant") {
-							progress.event = "llm_start";
-						}
-						break;
-					case "message_end":
-						if (event.message?.role === "assistant") {
-							progress.event = "llm_end";
-						}
-						break;
-					case "tool_execution_start":
-						toolArgsMap.set(event.toolCallId, event.args);
-						progress.event = "tool_start";
-						progress.data = { tool: event.toolName, args: event.args };
-						break;
-					case "tool_execution_end": {
-						const args = toolArgsMap.get(event.toolCallId);
-						progress.event = "tool_end";
-						progress.data = { tool: event.toolName, args: args, result: event.result, isError: event.isError };
-						toolArgsMap.delete(event.toolCallId);
-						break;
-					}
-				}
-
-				// Publish progress event and await to maintain order
-				await (redisPublisher as any)
-					.xadd(outputQueue, "MAXLEN", "~", 1000, "*", "payload", JSON.stringify(progress))
-					.catch((err: any) => {
-						error("Failed to publish progress event:", err);
-					});
+				await redisPublisher.xadd(outputQueue, "MAXLEN", "~", 1000, "*", "payload", JSON.stringify(progress));
 			});
 
 			try {
 				await session.prompt(prompt, imageContents.length > 0 ? { images: imageContents } : undefined);
 
-				// Re-check for abortion if session.prompt() didn't throw
-				const lastAssistant = agent.state.messages.filter((m) => m.role === "assistant").slice(-1)[0] as any;
-				if (lastAssistant?.stopReason === "aborted") {
-					throw new Error("Aborted");
-				}
-
-				log(`Task ${id} completed.`);
-
 				const resultPayload: WorkerResponse = {
 					id,
 					user_id,
-					source,
+					source: taskSource,
 					agent_id: agentId,
-					session_id: session.sessionId,
+					session_id: currentSessionId,
 					response: responseText,
-					usage: lastAssistant?.usage,
 					status: "success",
 				};
+				await redisPublisher.xadd(outputQueue, "MAXLEN", "~", 1000, "*", "payload", JSON.stringify(resultPayload));
 
-				await (redisPublisher as any).xadd(
-					outputQueue,
-					"MAXLEN",
-					"~",
-					1000,
-					"*",
-					"payload",
-					JSON.stringify(resultPayload),
+				// Persist
+				await redisSessionStore.persistSnapshot(
+					currentSessionId,
+					sessionManager.getHeader()!,
+					sessionManager.getEntries(),
+					{ source: taskSource }
 				);
 			} catch (err: any) {
-				const isAborted = err.message === "Aborted";
-				if (isAborted) {
-					log(`Task ${id} was aborted by user.`);
-				} else {
-					error(`Error processing task ${id}:`, err);
-				}
 				const errorPayload: WorkerResponse = {
 					id,
 					user_id,
-					source,
+					source: taskSource,
 					agent_id: agentId,
-					session_id: session.sessionId,
-					error: isAborted ? "Task aborted by user" : err.message,
-					status: isAborted ? "aborted" : "error",
+					session_id: currentSessionId,
+					error: err.message,
+					status: "error",
 				};
-				await (redisPublisher as any).xadd(
-					outputQueue,
-					"MAXLEN",
-					"~",
-					1000,
-					"*",
-					"payload",
-					JSON.stringify(errorPayload),
-				);
+				await redisPublisher.xadd(outputQueue, "MAXLEN", "~", 1000, "*", "payload", JSON.stringify(errorPayload));
 			} finally {
-				try {
-					await redisSessionStore.persistSnapshot(
-						session.sessionId,
-						sessionManager.getHeader()!,
-						sessionManager.getEntries(),
-					);
-				} catch (persistErr) {
-					error("Failed to persist session snapshot to Redis:", persistErr);
-				}
 				unsubscribe();
+				currentAgent = null;
 				currentTaskId = undefined;
-				// ACK the message after processing
 				await redis.xack(inputQueue, consumerGroup, messageId);
 			}
 		} catch (err) {
-			error("Worker loop error:", err);
-			// Wait a bit before retrying if there's a connection issue
-			await new Promise((resolve) => setTimeout(resolve, 5000));
+			error("Loop error", err);
+			await new Promise(r => setTimeout(r, 5000));
 		}
 	}
 }
 
-main().catch((err) => {
-	error("Fatal worker error:", err);
+main().catch(err => {
+	error("Fatal", err);
 	process.exit(1);
 });
