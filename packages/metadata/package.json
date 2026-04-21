@@ -1,0 +1,21 @@
+{
+  "name": "@mariozechner/pi-metadata-client",
+  "version": "0.54.0",
+  "description": "Unified Metadata Client for Node.js",
+  "type": "module",
+  "main": "./dist/index.js",
+  "bin": {
+    "metadata-client": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "commander": "^13.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "typescript": "^5.7.3"
+  }
+}

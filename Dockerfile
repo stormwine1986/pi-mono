@@ -21,6 +21,7 @@ COPY packages/agent/package.json ./packages/agent/
 COPY packages/coding-agent/package.json ./packages/coding-agent/
 COPY packages/worker/package.json ./packages/worker/
 COPY packages/tui/package.json ./packages/tui/
+COPY packages/metadata/package.json ./packages/metadata/
 
 # Install dependencies
 RUN npm ci
@@ -30,6 +31,7 @@ COPY . .
 
 # Build necessary packages in order
 RUN npm run build -w @mariozechner/pi-tui && \
+    npm run build -w @mariozechner/pi-metadata-client && \
     npm run build -w @mariozechner/pi-ai && \
     npm run build -w @mariozechner/pi-agent-core && \
     npm run build -w @mariozechner/pi-coding-agent && \

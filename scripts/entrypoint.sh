@@ -19,8 +19,12 @@ if [ -z "$LLM_API_KEY" ]; then
     # URL: GET /user?uid=<OWNER>
     # Expected JSON: [ { "resources": { "llm_api_key": "..." } } ]
     
-    METADATA_ENDPOINT="${METADATA_URL}/user?uid=${OWNER}"
-    echo "[Entrypoint] Fetching from ${METADATA_ENDPOINT}..."
+    # Use the new Node-based metadata client
+    METADATA_CLIENT="node /app/packages/metadata/dist/cli.js"
+    
+    METADATA_PATH="/user"
+    QUERY="uid=${OWNER}"
+    echo "[Entrypoint] Fetching from ${METADATA_URL}${METADATA_PATH}?${QUERY}..."
     
     # Use curl with retry
     MAX_RETRIES=10
@@ -28,7 +32,7 @@ if [ -z "$LLM_API_KEY" ]; then
     COUNT=0
     
     while [ $COUNT -lt $MAX_RETRIES ]; do
-        RESPONSE=$(curl -s -f "${METADATA_ENDPOINT}" || true)
+        RESPONSE=$($METADATA_CLIENT GET "$METADATA_PATH" "" "$QUERY" || true)
         if [ -n "$RESPONSE" ] && [ "$RESPONSE" != "[]" ]; then
             break
         fi
@@ -63,12 +67,13 @@ fi
 # Requirement STACK-RS-244: agent container needs restish and mcporter config from metadata service.
 if [ -n "$METADATA_URL" ] && [ -n "$OWNER" ]; then
     echo "[Entrypoint] Fetching tool configurations for user ${OWNER}..."
+    METADATA_CLIENT="node /app/packages/metadata/dist/cli.js"
 
     # 1. Fetch mcporter config
     MCPORTER_CONF_DIR="$HOME/.mcporter"
     mkdir -p "$MCPORTER_CONF_DIR"
     echo "[Entrypoint] Fetching mcporter config..."
-    MC_RESPONSE=$(curl -s -f "${METADATA_URL}/mcporter/config?uid=${OWNER}" || echo "{}")
+    MC_RESPONSE=$($METADATA_CLIENT GET "/mcporter/config" "" "uid=${OWNER}" || echo "{}")
     if [ "$MC_RESPONSE" != "{}" ]; then
         echo "$MC_RESPONSE" | jq '.' > "$MCPORTER_CONF_DIR/mcporter.json"
         chmod 600 "$MCPORTER_CONF_DIR/mcporter.json"
@@ -82,7 +87,7 @@ if [ -n "$METADATA_URL" ] && [ -n "$OWNER" ]; then
     mkdir -p "$RESTISH_CONF_DIR"
     echo "[Entrypoint] Fetching restish config..."
     # Note: /restish/config returns a full apis.json (v0.20+ format)
-    curl -s -f "${METADATA_URL}/restish/config?uid=${OWNER}" -o "$RESTISH_CONF_DIR/apis.json" || echo "⚠️ Warning: Failed to fetch restish config."
+    $METADATA_CLIENT GET "/restish/config" "" "uid=${OWNER}" > "$RESTISH_CONF_DIR/apis.json" || echo "⚠️ Warning: Failed to fetch restish config."
     if [ -f "$RESTISH_CONF_DIR/apis.json" ]; then
         chmod 600 "$RESTISH_CONF_DIR/apis.json"
         echo "✅ Created restish apis.json"

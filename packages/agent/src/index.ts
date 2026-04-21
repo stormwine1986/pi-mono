@@ -6,3 +6,5 @@ export * from "./agent-loop.js";
 export * from "./proxy.js";
 // Types
 export * from "./types.js";
+// Metadata Client
+export * from "@mariozechner/pi-metadata-client";
