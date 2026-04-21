@@ -142,6 +142,19 @@ async function main() {
 					}
 				}
 
+				// Map Mario library events to legacy stack format for compatibility
+				// WebUI: status-bar.js, Ontology: auditor_logic.py
+				let mappedEvent = event.type;
+				const mappedData = { ...event };
+
+				if (event.type === "tool_execution_start") {
+					mappedEvent = "tool_start";
+					(mappedData as any).tool = event.toolName;
+				} else if (event.type === "tool_execution_end") {
+					mappedEvent = "tool_end";
+					(mappedData as any).tool = event.toolName;
+				}
+
 				const progress = {
 					task_id: id,
 					user_id,
@@ -149,8 +162,8 @@ async function main() {
 					agent_id: agentId,
 					session_id: currentSessionId,
 					status: "progress",
-					event: event.type,
-					data: event
+					event: mappedEvent,
+					data: mappedData,
 				};
 				await redisPublisher.xadd(outputQueue, "MAXLEN", "~", 1000, "*", "payload", JSON.stringify(progress));
 			});
