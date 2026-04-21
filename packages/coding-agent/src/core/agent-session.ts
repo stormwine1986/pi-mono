@@ -1571,7 +1571,7 @@ export class AgentSession {
 
 		// --- NEW LOGIC: Fast rolling window (Memory Service handles long-term storage) ---
 		const branchEntries = this.sessionManager.getBranch();
-		
+
 		let startIdx = 0;
 		for (let i = branchEntries.length - 1; i >= 0; i--) {
 			if (branchEntries[i].type === "compaction") {
@@ -1582,7 +1582,7 @@ export class AgentSession {
 
 		const activeEntries = branchEntries.slice(startIdx);
 		const turnIndices: number[] = [];
-		
+
 		for (let i = 0; i < activeEntries.length; i++) {
 			const entry = activeEntries[i];
 			if (entry.type === "message" && entry.message.role === "user") {
@@ -1599,7 +1599,9 @@ export class AgentSession {
 			if (firstKeptEntry && firstKeptEntry.id) {
 				const retainedTurns = turnIndices.length - settings.unloadSize;
 				const fakeSummary = `[INFO] Session segment archived seamlessly to Memory Service. (Local active window retained ${retainedTurns} turns)`;
-				console.log(`[AgentSession] Context offload triggered: turnCount=${turnIndices.length}, firstKeptId=${firstKeptEntry.id}, retainedTurns=${retainedTurns}`);
+				console.log(
+					`[AgentSession] Context offload triggered: turnCount=${turnIndices.length}, firstKeptId=${firstKeptEntry.id}, retainedTurns=${retainedTurns}`,
+				);
 				this.sessionManager.appendCompaction(fakeSummary, firstKeptEntry.id, 0, undefined, false);
 				const sessionContext = this.sessionManager.buildSessionContext();
 				this.agent.replaceMessages(sessionContext.messages);

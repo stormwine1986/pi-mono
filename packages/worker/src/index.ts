@@ -1,7 +1,13 @@
-import { homedir } from "node:os";
-import { join, extname } from "node:path";
 import { readFile } from "node:fs/promises";
-import { createAgentSession, SessionManager, SettingsManager, AuthStorage, ModelRegistry } from "@mariozechner/pi-coding-agent";
+import { homedir } from "node:os";
+import { extname, join } from "node:path";
+import {
+	AuthStorage,
+	createAgentSession,
+	ModelRegistry,
+	SessionManager,
+	SettingsManager,
+} from "@mariozechner/pi-coding-agent";
 import { Redis } from "ioredis";
 import { consumerGroup, consumerName, controlChannel, inputQueue, outputQueue, owner, redisUrl } from "./config.js";
 import { error, log } from "./logger.js";
@@ -44,7 +50,7 @@ async function main() {
 	// Resolve model registry to find the actual model object
 	const authStorage = AuthStorage.create(join(agentDir, "auth.json"));
 	const modelRegistry = new ModelRegistry(authStorage, join(agentDir, "models.json"));
-	const model = (defaultProvider && defaultModelId) ? modelRegistry.find(defaultProvider, defaultModelId) : undefined;
+	const model = defaultProvider && defaultModelId ? modelRegistry.find(defaultProvider, defaultModelId) : undefined;
 
 	// Initialize agent session (loads settings, auth, tools, and system prompt)
 	const { session } = await createAgentSession({
@@ -94,9 +100,17 @@ async function main() {
 					id: taskId,
 					user_id: signal.user_id || "internal",
 					source: signal.source || "internal",
-					prompt: `新会话已经开启。\n当前模型设定：${modelInfo}。\n会话所属用户ID：${signal.user_id}。\n\n从记忆里检索有关用户的称呼， 居住时区，然后向用户发出问候，并在问候中包含模型设定信息。`,
+					prompt: `新会话已经开启。\n当前模型设定：${modelInfo}。\n会话所属用户ID：${signal.user_id}。\n\n向用户发出问候，并在问候中包含模型设定信息。`,
 				};
-				await (redisPublisher as any).xadd(inputQueue, "MAXLEN", "~", 1000, "*", "payload", JSON.stringify(payload));
+				await (redisPublisher as any).xadd(
+					inputQueue,
+					"MAXLEN",
+					"~",
+					1000,
+					"*",
+					"payload",
+					JSON.stringify(payload),
+				);
 				log(`[Reset] Pushed new session greeting to ${inputQueue}`);
 			}
 		} catch (e: any) {
@@ -109,7 +123,6 @@ async function main() {
 
 	log(`Listening for messages on queue: ${inputQueue}`);
 	log(`Using model: ${agent.state.model?.provider}:${agent.state.model?.id} (Thinking: ${agent.state.thinkingLevel})`);
-
 
 	while (true) {
 		try {
@@ -214,7 +227,7 @@ async function main() {
 				}
 
 				// Emit progress events
-				let progress: any = {
+				const progress: any = {
 					id,
 					user_id,
 					source,
@@ -240,27 +253,28 @@ async function main() {
 						progress.event = "tool_start";
 						progress.data = { tool: event.toolName, args: event.args };
 						break;
-					case "tool_execution_end":
+					case "tool_execution_end": {
 						const args = toolArgsMap.get(event.toolCallId);
 						progress.event = "tool_end";
 						progress.data = { tool: event.toolName, args: args, result: event.result, isError: event.isError };
 						toolArgsMap.delete(event.toolCallId);
 						break;
+					}
 				}
 
 				// Publish progress event and await to maintain order
-				await (redisPublisher as any).xadd(outputQueue, "MAXLEN", "~", 1000, "*", "payload", JSON.stringify(progress)).catch((err: any) => {
-					error("Failed to publish progress event:", err);
-				});
+				await (redisPublisher as any)
+					.xadd(outputQueue, "MAXLEN", "~", 1000, "*", "payload", JSON.stringify(progress))
+					.catch((err: any) => {
+						error("Failed to publish progress event:", err);
+					});
 			});
 
 			try {
 				await session.prompt(prompt, imageContents.length > 0 ? { images: imageContents } : undefined);
 
 				// Re-check for abortion if session.prompt() didn't throw
-				const lastAssistant = agent.state.messages
-					.filter((m) => m.role === "assistant")
-					.slice(-1)[0] as any;
+				const lastAssistant = agent.state.messages.filter((m) => m.role === "assistant").slice(-1)[0] as any;
 				if (lastAssistant?.stopReason === "aborted") {
 					throw new Error("Aborted");
 				}
@@ -278,7 +292,15 @@ async function main() {
 					status: "success",
 				};
 
-				await (redisPublisher as any).xadd(outputQueue, "MAXLEN", "~", 1000, "*", "payload", JSON.stringify(resultPayload));
+				await (redisPublisher as any).xadd(
+					outputQueue,
+					"MAXLEN",
+					"~",
+					1000,
+					"*",
+					"payload",
+					JSON.stringify(resultPayload),
+				);
 			} catch (err: any) {
 				const isAborted = err.message === "Aborted";
 				if (isAborted) {
@@ -295,13 +317,21 @@ async function main() {
 					error: isAborted ? "Task aborted by user" : err.message,
 					status: isAborted ? "aborted" : "error",
 				};
-				await (redisPublisher as any).xadd(outputQueue, "MAXLEN", "~", 1000, "*", "payload", JSON.stringify(errorPayload));
+				await (redisPublisher as any).xadd(
+					outputQueue,
+					"MAXLEN",
+					"~",
+					1000,
+					"*",
+					"payload",
+					JSON.stringify(errorPayload),
+				);
 			} finally {
 				try {
 					await redisSessionStore.persistSnapshot(
 						session.sessionId,
 						sessionManager.getHeader()!,
-						sessionManager.getEntries()
+						sessionManager.getEntries(),
 					);
 				} catch (persistErr) {
 					error("Failed to persist session snapshot to Redis:", persistErr);

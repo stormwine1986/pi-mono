@@ -1,5 +1,5 @@
-import type { Redis } from "ioredis";
 import type { SessionEntry, SessionHeader } from "@mariozechner/pi-coding-agent";
+import type { Redis } from "ioredis";
 
 type Logger = (message: string, ...args: unknown[]) => void;
 
@@ -49,7 +49,10 @@ export class RedisSessionStore {
 	private readonly maxSessions: number;
 	private readonly log: Logger;
 
-	constructor(private readonly redis: Redis, opts: RedisSessionStoreOptions) {
+	constructor(
+		private readonly redis: Redis,
+		opts: RedisSessionStoreOptions,
+	) {
 		this.owner = opts.owner;
 		this.maxEntries = opts.maxEntries;
 		this.maxSessions = opts.maxSessions;
@@ -240,5 +243,3 @@ export class RedisSessionStore {
 		this.log(`[SessionStore] Reset to fresh session: ${sessionId}`);
 	}
 }
-
-

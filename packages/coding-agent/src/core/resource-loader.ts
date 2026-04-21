@@ -55,12 +55,7 @@ function resolvePromptInput(input: string | undefined, description: string): str
 }
 
 function loadContextFilesFromDir(dir: string): Array<{ path: string; content: string }> {
-	const candidates = [
-		"AGENTS.md",
-		"CLAUDE.md",
-		"IDENTITY.md",
-		"SOUL.md",
-	];
+	const candidates = ["AGENTS.md", "CLAUDE.md", "IDENTITY.md", "SOUL.md", "USER.md", "MEMORY.md"];
 	const files: Array<{ path: string; content: string }> = [];
 	const seenFilenames = new Set<string>(); // Prevent case-clash duplicates on case-insensitive filesystems
 

@@ -168,7 +168,10 @@ Pi documentation (read only when the user asks about pi itself, its SDK, extensi
 		prompt += "\n\n# Project Context\n\n";
 		prompt += "The following workspace context files define your persona and guidelines:\n";
 		prompt += "- If SOUL.md is present, embody its persona and tone strictly. Avoid generic AI responses.\n";
-		prompt += "- If IDENTITY.md is present, it defines who you are and your core capabilities.\n\n";
+		prompt += "- If IDENTITY.md is present, it defines who you are and your core capabilities.\n";
+		prompt += "- If USER.md is present, it contains essential information about the user you are assisting.\n";
+		prompt +=
+			"- If MEMORY.md is present, it contains your long-term memory and established user persona/preferences.\n\n";
 
 		for (const { path: filePath, content } of contextFiles) {
 			prompt += `## ${basename(filePath)}\n\n${content}\n\n`;
