@@ -16,13 +16,13 @@ if [ -z "$LLM_API_KEY" ]; then
   fi
 
   # Fetch from metadata module
-  # URL: GET /user?uid=<OWNER>
+  # URL: GET /agent?uid=<OWNER>
   # Expected JSON: [ { "resources": { "llm_api_key": "..." } } ]
 
   # Use the new Node-based metadata client
   METADATA_CLIENT="node /app/packages/metadata/dist/cli.js"
 
-  METADATA_PATH="/user"
+  METADATA_PATH="/agent"
   QUERY="uid=${OWNER}"
   echo "[Entrypoint] Fetching from ${METADATA_URL}${METADATA_PATH}?${QUERY}..."
 

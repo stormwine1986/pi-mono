@@ -93,7 +93,7 @@ export class MetadataClient {
 		} else {
 			params.uid = this.owner;
 		}
-		return this.request<any[]>("GET", "/user", params);
+		return this.request<any[]>("GET", "/agent", params);
 	}
 
 	async postAudit(endpoint: string, payload: any) {
