@@ -9,7 +9,7 @@ show_help() {
     echo ""
     echo "Actions:"
     echo "  search --user_id=<id> [--threshold=<n>] <query>  检索相关记忆"
-    echo "  add --user_id=<id> [--agent_id=<id>] <text>      手动添加记忆"
+    echo "  add --user_id=<id> <text>      手动添加记忆"
     echo "  list --user_id=<id>            获取用户所有记忆"
     echo "  delete --user_id=<id> <id>     删除特定记忆 (需提供 Memory ID)"
     echo "  history [options]              查看记忆审计历史"
@@ -41,11 +41,9 @@ case "$1" in
     ;;
   add)
     shift
-    USER_ID=""; AGENT_ID=""; TEXT=""
     while [[ $# -gt 0 ]]; do
       case "$1" in
         --user_id=*)  USER_ID="${1#*=}"; shift ;;
-        --agent_id=*) AGENT_ID="${1#*=}"; shift ;;
         *)            TEXT="$*"; break ;;
       esac
     done
@@ -53,7 +51,7 @@ case "$1" in
     if [ -z "$TEXT" ]; then echo "Error: text is required"; exit 1; fi
     curl -s --noproxy "*" --max-time 15 -X POST "${MEMORY_URL}/memories" \
       -H "Content-Type: application/json" \
-      -d "{\"text\": \"${TEXT}\", \"user_id\": \"${USER_ID}\", \"agent_id\": \"${AGENT_ID}\"}"
+      -d "{\"text\": \"${TEXT}\", \"user_id\": \"${USER_ID}\"}"
     ;;
   list)
     shift

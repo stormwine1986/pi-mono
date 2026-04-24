@@ -20,7 +20,6 @@ async function main() {
 	const stateDir = process.env["PI-STATE-DIR"] || join(homedir(), ".pi");
 	const agentDir = join(stateDir, "agent");
 	const workspaceDir = process.env["PI-WORKSPACE-DIR"] || join(agentDir, "workspace");
-	const agentId = process.env["AGENT_ID"] || "0";
 
 	log(`State directory: ${stateDir}`);
 	log(`Workspace directory: ${workspaceDir}`);
@@ -159,7 +158,6 @@ async function main() {
 					task_id: currentTaskId,
 					user_id,
 					source: taskSource,
-					agent_id: agentId,
 					session_id: currentSessionId,
 					status: "progress",
 					event: mappedEvent,
@@ -175,7 +173,6 @@ async function main() {
 					task_id: currentTaskId,
 					user_id,
 					source: taskSource,
-					agent_id: agentId,
 					session_id: currentSessionId,
 					response: responseText,
 					status: "success",
@@ -194,7 +191,6 @@ async function main() {
 					task_id: currentTaskId,
 					user_id,
 					source: taskSource,
-					agent_id: agentId,
 					session_id: currentSessionId,
 					error: err.message,
 					status: "error",
