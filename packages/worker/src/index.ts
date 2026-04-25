@@ -1,5 +1,5 @@
-import { readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { extname, join } from "node:path";
 import {
@@ -59,8 +59,16 @@ async function main() {
 	while (true) {
 		try {
 			const result = await redis.xreadgroup(
-				"GROUP", consumerGroup, consumerName,
-				"COUNT", 1, "BLOCK", 0, "STREAMS", inputQueue, ">"
+				"GROUP",
+				consumerGroup,
+				consumerName,
+				"COUNT",
+				1,
+				"BLOCK",
+				0,
+				"STREAMS",
+				inputQueue,
+				">",
 			);
 
 			if (!result || (result as any).length === 0) continue;
@@ -70,7 +78,7 @@ async function main() {
 			const payloadRaw = fields[fields.indexOf("payload") + 1];
 			const payload = JSON.parse(payloadRaw) as WorkerTask;
 
-			const { task_id, user_id, source, prompt, session_id, images: imagePaths } = payload;
+			const { task_id, receiver, submitter, source, prompt, session_id, images: imagePaths } = payload;
 			const taskSource = source || "web";
 			currentTaskId = task_id;
 
@@ -85,15 +93,16 @@ async function main() {
 				agentDir: agentDir,
 				settingsManager: settingsManager,
 				agentsFilesOverride: (base) => ({
-					agentsFiles: taskSource === "acp"
-						? base.agentsFiles.filter(f => !f.path.endsWith("MEMORY.md"))
-						: base.agentsFiles
-				})
+					agentsFiles:
+						taskSource === "acp"
+							? base.agentsFiles.filter((f) => !f.path.endsWith("MEMORY.md"))
+							: base.agentsFiles,
+				}),
 			});
 
 			const currentSessionId = session_id || randomUUID();
 			const sessionManager = SessionManager.inMemory(workspaceDir, currentSessionId);
-			
+
 			// Load session only if session_id was explicitly provided (Standard ACP isolation)
 			if (session_id) {
 				const restored = await redisSessionStore.getSession(currentSessionId);
@@ -104,7 +113,8 @@ async function main() {
 
 			const defaultProvider = settingsManager.getDefaultProvider();
 			const defaultModelId = settingsManager.getDefaultModel();
-			const model = defaultProvider && defaultModelId ? modelRegistry.find(defaultProvider, defaultModelId) : undefined;
+			const model =
+				defaultProvider && defaultModelId ? modelRegistry.find(defaultProvider, defaultModelId) : undefined;
 
 			const { session } = await createAgentSession({
 				cwd: workspaceDir,
@@ -116,7 +126,7 @@ async function main() {
 				model: model,
 				thinkingLevel: settingsManager.getDefaultThinkingLevel(),
 			});
-			
+
 			const agent = session.agent;
 			currentAgent = agent;
 
@@ -156,7 +166,8 @@ async function main() {
 
 				const progress = {
 					task_id: currentTaskId,
-					user_id,
+					receiver,
+					submitter,
 					source: taskSource,
 					session_id: currentSessionId,
 					status: "progress",
@@ -171,7 +182,8 @@ async function main() {
 
 				const resultPayload: WorkerResponse = {
 					task_id: currentTaskId,
-					user_id,
+					receiver,
+					submitter,
 					source: taskSource,
 					session_id: currentSessionId,
 					response: responseText,
@@ -184,12 +196,13 @@ async function main() {
 					currentSessionId,
 					sessionManager.getHeader()!,
 					sessionManager.getEntries(),
-					{ source: taskSource }
+					{ source: taskSource },
 				);
 			} catch (err: any) {
 				const errorPayload: WorkerResponse = {
 					task_id: currentTaskId,
-					user_id,
+					receiver,
+					submitter,
 					source: taskSource,
 					session_id: currentSessionId,
 					error: err.message,
@@ -204,12 +217,12 @@ async function main() {
 			}
 		} catch (err) {
 			error("Loop error", err);
-			await new Promise(r => setTimeout(r, 5000));
+			await new Promise((r) => setTimeout(r, 5000));
 		}
 	}
 }
 
-main().catch(err => {
+main().catch((err) => {
 	error("Fatal", err);
 	process.exit(1);
 });

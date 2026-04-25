@@ -1,6 +1,7 @@
 export interface WorkerTask {
 	task_id?: string;
-	user_id?: string;
+	receiver?: string; // STACK-RS-310: renamed from user_id
+	submitter?: string; // STACK-RS-310: new field
 	source?: string;
 	prompt?: string;
 	session_id?: string;
@@ -10,7 +11,8 @@ export interface WorkerTask {
 
 export type WorkerResponse = {
 	task_id?: string;
-	user_id?: string;
+	receiver?: string; // STACK-RS-310
+	submitter?: string; // STACK-RS-310
 	source?: string;
 	agent_id?: string;
 	session_id?: string;
@@ -35,7 +37,7 @@ export type WorkerResponse = {
 
 export interface WorkerControlSignal {
 	task_id?: string;
-	user_id?: string;
+	receiver?: string; // STACK-RS-310
 	source?: string;
 	command: "stop" | "steer" | "reset";
 	message?: string;
