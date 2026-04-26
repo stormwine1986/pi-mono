@@ -71,19 +71,19 @@ export class RedisSessionStore {
 
 
 	private getSessionIndexKey(): string {
-		return `user:${this.owner}:${this.namespace}:sessions`;
+		return `agent:${this.owner}:${this.namespace}:sessions`;
 	}
 
 	private getHeaderKey(sessionId: string): string {
-		return `user:${this.owner}:${this.namespace}:session:${sessionId}:header`;
+		return `agent:${this.owner}:${this.namespace}:session:${sessionId}:header`;
 	}
 
 	private getEntriesKey(sessionId: string): string {
-		return `user:${this.owner}:${this.namespace}:session:${sessionId}:entries`;
+		return `agent:${this.owner}:${this.namespace}:session:${sessionId}:entries`;
 	}
 
 	private getMetaKey(sessionId: string): string {
-		return `user:${this.owner}:${this.namespace}:session:${sessionId}:meta`;
+		return `agent:${this.owner}:${this.namespace}:session:${sessionId}:meta`;
 	}
 
 
