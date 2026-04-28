@@ -11,12 +11,6 @@ interface RedisSessionStoreOptions {
 	log: Logger;
 }
 
-interface SessionLoadResult {
-	previousSessionId?: string;
-	header?: SessionHeader;
-	entries: SessionEntry[];
-}
-
 interface SessionMetadata {
 	id: string;
 	title: string;
@@ -37,7 +31,7 @@ function parsePositiveInt(name: string, value: string | undefined, defaultValue?
 	return parsed;
 }
 
-function safeParse<T>(raw: string): T | null {
+function _safeParse<T>(raw: string): T | null {
 	try {
 		return JSON.parse(raw) as T;
 	} catch {
@@ -69,7 +63,6 @@ export class RedisSessionStore {
 		return new RedisSessionStore(redis, { owner, maxEntries, maxSessions, log });
 	}
 
-
 	private getSessionIndexKey(): string {
 		return `agent:${this.owner}:${this.namespace}:sessions`;
 	}
@@ -85,7 +78,6 @@ export class RedisSessionStore {
 	private getMetaKey(sessionId: string): string {
 		return `agent:${this.owner}:${this.namespace}:session:${sessionId}:meta`;
 	}
-
 
 	async persistSnapshot(
 		sessionId: string,
@@ -158,7 +150,7 @@ export class RedisSessionStore {
 		const result: SessionMetadata[] = [];
 		for (const id of sessionIds) {
 			const meta = await this.redis.hgetall(this.getMetaKey(id));
-			if (meta && meta.id) {
+			if (meta?.id) {
 				result.push({
 					id: meta.id,
 					title: meta.title,
@@ -186,5 +178,4 @@ export class RedisSessionStore {
 
 		return { entries };
 	}
-
 }

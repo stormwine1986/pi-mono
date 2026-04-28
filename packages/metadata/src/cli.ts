@@ -23,11 +23,11 @@ program
 				});
 			}
 
-			let body;
+			let body: any;
 			if (data) {
 				try {
 					body = JSON.parse(data);
-				} catch (e) {
+				} catch (_e) {
 					// If not JSON, but data is provided, maybe it's meant to be a string?
 					// For now, we fallback to just data if it fails parsing
 					body = data;

@@ -46,13 +46,13 @@ async function main() {
 	let currentTaskId: string | undefined;
 	let currentAgent: any = null;
 
-	redisSubscriber.on("message", async (channel, rawSignal) => {
+	redisSubscriber.on("message", async (_channel, rawSignal) => {
 		try {
 			const signal: WorkerControlSignal = JSON.parse(rawSignal);
 			if (signal.command === "stop" && currentAgent) {
 				currentAgent.abort();
 			}
-		} catch (e) {}
+		} catch (_e) {}
 	});
 	await redisSubscriber.subscribe(controlChannel);
 
@@ -88,7 +88,7 @@ async function main() {
 			}
 
 			// Context-aware resource loader
-			const resourceLoader = new DefaultResourceLoader({
+			const _resourceLoader = new DefaultResourceLoader({
 				cwd: workspaceDir,
 				agentDir: agentDir,
 				settingsManager: settingsManager,
@@ -139,7 +139,7 @@ async function main() {
 						const ext = extname(relPath).toLowerCase();
 						const mime = ext === ".png" ? "image/png" : "image/jpeg";
 						imageContents.push({ type: "image", data: buffer.toString("base64"), mimeType: mime });
-					} catch (e) {}
+					} catch (_e) {}
 				}
 			}
 

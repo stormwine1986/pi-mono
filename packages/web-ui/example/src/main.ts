@@ -72,10 +72,14 @@ let agentUnsubscribe: (() => void) | undefined;
 
 const generateTitle = (messages: AgentMessage[]): string => {
 	const firstUserMsg = messages.find((m: any) => m.role === "user" || m.role === "user-with-attachments");
-	if (!firstUserMsg || (firstUserMsg.role !== "user" && firstUserMsg.role !== "user-with-attachments")) return "";
+	if (
+		!firstUserMsg ||
+		((firstUserMsg as any).role !== "user" && (firstUserMsg as any).role !== "user-with-attachments")
+	)
+		return "";
 
 	let text = "";
-	const content = firstUserMsg.content;
+	const content = (firstUserMsg as any).content;
 
 	if (typeof content === "string") {
 		text = content;

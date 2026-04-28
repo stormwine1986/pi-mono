@@ -59,7 +59,7 @@ export class MetadataClient {
 				"x-request-alias": this.alias,
 			};
 
-			let fetchBody;
+			let fetchBody: string | undefined;
 			if (body && (method === "POST" || method === "PUT" || method === "PATCH")) {
 				headers["Content-Type"] = "application/json";
 				fetchBody = JSON.stringify(body);

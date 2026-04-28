@@ -38,7 +38,6 @@ import {
 	estimateContextTokens,
 	generateBranchSummary,
 	prepareCompaction,
-	shouldCompact,
 } from "./compaction/index.js";
 import { DEFAULT_THINKING_LEVEL } from "./defaults.js";
 import { exportSessionToHtml, type ToolHtmlRenderer } from "./export-html/index.js";
@@ -1596,7 +1595,7 @@ export class AgentSession {
 		if (turnIndices.length > settings.keepSize) {
 			const firstKeptIndex = turnIndices[settings.unloadSize];
 			const firstKeptEntry = branchEntries[firstKeptIndex];
-			if (firstKeptEntry && firstKeptEntry.id) {
+			if (firstKeptEntry?.id) {
 				const retainedTurns = turnIndices.length - settings.unloadSize;
 				const fakeSummary = `[INFO] Session segment archived seamlessly to Memory Service. (Local active window retained ${retainedTurns} turns)`;
 				console.log(

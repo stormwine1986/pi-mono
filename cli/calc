@@ -1,3 +1,8 @@
 #!/bin/bash
 # Wrapper for calc.js to ensure node_modules are found
-cd /app && node /app/cli/calc.js "$@"
+APP_ROOT="${PI_APP_ROOT:-/app}"
+if [ ! -d "$APP_ROOT" ]; then
+    # Fallback for local development
+    APP_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
+fi
+cd "$APP_ROOT" && node ./cli/calc.js "$@"
