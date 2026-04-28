@@ -1,0 +1,3 @@
+#!/bin/bash
+# Wrapper for calc.js to ensure node_modules are found
+cd /app && node /app/cli/calc.js "$@"
