@@ -10,6 +10,7 @@ import {
 	SessionManager,
 	SettingsManager,
 } from "@mariozechner/pi-coding-agent";
+import { metadataClient } from "@mariozechner/pi-metadata-client";
 import { Redis } from "ioredis";
 import { consumerGroup, consumerName, controlChannel, inputQueue, outputQueue, owner, redisUrl } from "./config.js";
 import { error, log } from "./logger.js";
@@ -81,6 +82,31 @@ async function main() {
 			const { task_id, receiver, submitter, source, prompt, session_id, images: imagePaths } = payload;
 			const taskSource = source || "web";
 			currentTaskId = task_id;
+
+			// Idempotency check: check if task is already finished in metadata service
+			let dedupKey: string | undefined;
+			if (task_id) {
+				dedupKey = `agent:${owner}:worker:dedup:${task_id}`;
+				const acquired = await redis.set(dedupKey, "1", "EX", 300, "NX"); // 5-minute lock
+				if (!acquired) {
+					log(`Task ${task_id} is currently locked/processing. Skipping duplicate message.`);
+					await redis.xack(inputQueue, consumerGroup, messageId);
+					continue;
+				}
+
+				try {
+					const existingTask = await metadataClient.getTask(task_id);
+					if (existingTask && ["success", "error", "aborted"].includes(existingTask.status)) {
+						log(`Task ${task_id} already finished with status ${existingTask.status}. Skipping.`);
+						await redis.del(dedupKey);
+						await redis.xack(inputQueue, consumerGroup, messageId);
+						continue;
+					}
+				} catch (err) {
+					error(`Failed to check idempotency for task ${task_id}: ${err}`);
+					// Continue processing if check fails to avoid blocking the queue
+				}
+			}
 
 			if (!prompt) {
 				await redis.xack(inputQueue, consumerGroup, messageId);
