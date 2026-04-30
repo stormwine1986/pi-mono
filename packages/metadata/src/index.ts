@@ -111,6 +111,10 @@ export class MetadataClient {
 	async getRestishConfig() {
 		return this.request("GET", "/restish/config", { uid: this.owner });
 	}
+
+	async getTask(taskId: string) {
+		return this.request<any>("GET", `/audit/tasks/${taskId}`);
+	}
 }
 
 export const metadataClient = new MetadataClient();
